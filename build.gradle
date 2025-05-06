@@ -17,7 +17,7 @@ buildscript {
         coreKtxVersion = "1.13.1"
         activityKtxVersion = "1.9.0"
         appcompatVersion = "1.6.1"
-        kotlinBomVersion = "1.8.22"
+        kotlinBomVersion = "2.1.0"
         utilcodexVersion = "1.31.1"
         opencvVersion = "4.9.0"
         
@@ -41,8 +41,9 @@ buildscript {
         
         // Gradle 插件版本
         gradleVersion = "7.3.0"
-        kotlinGradleVersion = "1.7.10"
+        kotlinGradleVersion = "2.1.0"
         dokkaVersion = "1.8.10"
+        agp_version = '8.9.2'
     }
     repositories {
         maven { url 'https://maven.aliyun.com/nexus/content/groups/public/' }
@@ -53,11 +54,9 @@ buildscript {
         google()
     }
     dependencies {
-        classpath 'com.android.tools.build:gradle:7.3.0'
-        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:1.7.10"
-
+        classpath "com.android.tools.build:gradle:$agp_version"
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:2.1.0"
         classpath 'com.github.dcendents:android-maven-gradle-plugin:2.1'
-
     }
 }
 plugins {
