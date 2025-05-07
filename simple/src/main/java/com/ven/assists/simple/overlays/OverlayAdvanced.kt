@@ -18,6 +18,7 @@ import com.ven.assists.window.AssistsWindowWrapper
 import com.ven.assists.simple.common.LogWrapper.logAppend
 import com.ven.assists.simple.databinding.AdvancedOverlayBinding
 import com.ven.assists.simple.step.AntForestEnergy
+import com.ven.assists.simple.step.Forward
 import com.ven.assists.simple.step.GestureBottomTab
 import com.ven.assists.simple.step.GestureScrollSocial
 import com.ven.assists.simple.step.OpenWechatSocial
@@ -70,6 +71,10 @@ object OverlayAdvanced : AssistsServiceListener {
 
                         StepManager.execute(AntForestEnergy::class.java, StepTag.STEP_1, begin = true)
 
+                    }
+                    btnForward.setOnClickListener {
+                        OverlayLog.show()
+                        StepManager.execute(Forward::class.java, StepTag.STEP_1, begin = true)
                     }
                     btnScrollContacts.setOnClickListener {
                         OverlayLog.show()

@@ -77,6 +77,13 @@
                 android:text="蚂蚁森林能量自动收集"
                  />
 
+            <Button
+                android:id="@+id/btn_forward"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:backgroundTint="@color/colorAccent"
+                android:text="自动转发京粉线报"
+                 />
 
         </com.google.android.flexbox.FlexboxLayout>
 
