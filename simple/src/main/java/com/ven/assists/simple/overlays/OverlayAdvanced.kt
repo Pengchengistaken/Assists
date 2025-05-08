@@ -46,40 +46,6 @@ object OverlayAdvanced : AssistsServiceListener {
             return field
         }
 
-    private val answerWechatCallListener: AssistsServiceListener = object : AssistsServiceListener {
-        override fun onAccessibilityEvent(event: AccessibilityEvent) {
-            super.onAccessibilityEvent(event)
-            if (event.packageName == "com.tencent.mm") {
-                var isInCall = false
-                event.source?.getNodes()?.forEach {
-                    if (it.containsText("邀请你语音通话") || it.containsText("邀请你视频通话")) {
-                        it.getBoundsInScreen().let {
-                            if (it.bottom < ScreenUtils.getScreenHeight() * 0.2) {
-                                isInCall = true
-                                StepManager.isStop = true
-                            }
-                            if (it.top > ScreenUtils.getScreenHeight() * 0.50 && it.bottom < ScreenUtils.getScreenHeight() * 0.8) {
-                                isInCall = true
-                                StepManager.isStop = true
-                            }
-                        }
-                    }
-                    if (isInCall && it.containsText("接听") && it.className == "android.widget.ImageButton") {
-                        "收到微信电话，接听".overlayToast()
-                        "收到微信电话，接听".logAppend()
-                        it.click()
-                    }
-                    if (isInCall && it.containsText("接听") && it.className == "android.widget.Button") {
-                        "收到微信电话，接听".overlayToast()
-                        "收到微信电话，接听".logAppend()
-                        CoroutineWrapper.launch { it.nodeGestureClick() }
-                    }
-                }
-            }
-        }
-    }
-
-
     var onClose: ((parent: View) -> Unit)? = null
 
     var showed = false
