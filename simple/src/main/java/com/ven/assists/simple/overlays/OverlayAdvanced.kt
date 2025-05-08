@@ -37,48 +37,9 @@ object OverlayAdvanced : AssistsServiceListener {
         get() {
             if (field == null) {
                 field = AdvancedOverlayBinding.inflate(LayoutInflater.from(AssistsService.instance)).apply {
-                    btnAnswerWechatCall.setOnClickListener {
-                        if (!AssistsService.listeners.contains(answerWechatCallListener)) {
-                            AssistsService.listeners.add(answerWechatCallListener)
-                        }
-                        CoroutineWrapper.launch(isMain = true) {
-                            OverlayLog.show()
-                            "微信电话自动接听监听中...".logAppend()
-                        }
-                    }
-                    btnOpenSocial.setOnClickListener {
-                        OverlayLog.show()
-                        StepManager.execute(OpenWechatSocial::class.java, StepTag.STEP_1, begin = true)
-                    }
-                    btnScrollSocial.setOnClickListener {
-                        OverlayLog.show()
-
-                        StepManager.execute(GestureScrollSocial::class.java, StepTag.STEP_1, begin = true)
-
-                    }
-                    btnPublishSocial.setOnClickListener {
-                        OverlayLog.show()
-                        StepManager.execute(PublishSocial::class.java, StepTag.STEP_1, begin = true)
-                    }
-                    btnClickBottomTab.setOnClickListener {
-                        OverlayLog.show()
-
-                        StepManager.execute(GestureBottomTab::class.java, StepTag.STEP_1, begin = true)
-
-                    }
-                    btnAntForestEnergy.setOnClickListener {
-                        OverlayLog.show()
-
-                        StepManager.execute(AntForestEnergy::class.java, StepTag.STEP_1, begin = true)
-
-                    }
                     btnForward.setOnClickListener {
                         OverlayLog.show()
                         StepManager.execute(Forward::class.java, StepTag.STEP_1, begin = true)
-                    }
-                    btnScrollContacts.setOnClickListener {
-                        OverlayLog.show()
-                        StepManager.execute(ScrollContacts::class.java, StepTag.STEP_1, begin = true)
                     }
                 }
             }
