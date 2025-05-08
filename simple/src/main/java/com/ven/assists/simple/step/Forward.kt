@@ -32,10 +32,11 @@ class Forward : StepImpl() {
 
         //2. 点击聊天列表中的京东线报交流群
         collector.next(StepTag.STEP_2) {
-            // 打印所有节点文本，调试用
-//            AssistsCore.getAllNodes().forEach {
-//                LogWrapper.logAppend("节点文本: ${it.text}")
-//            }
+            // 先滑动到顶部
+            AssistsCore.getAllNodes().filter { it.className == "androidx.recyclerview.widget.RecyclerView" || it.className == "android.widget.ListView" }
+                .forEach { listView ->
+                    listView.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD)
+                }
             // 尝试模糊查找
             AssistsCore.getAllNodes().find { it.containsText("京东线报交流群") }?.let {
                 LogWrapper.logAppend("找到京东线报相关群，点击进入")
