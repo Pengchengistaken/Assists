@@ -67,7 +67,7 @@ class Forward : StepImpl() {
                 }
             }
 
-            LogWrapper.logAppend("未找到京东线报交流群，10秒后重试")
+            LogWrapper.logAppend("未找到京东线报交流群或者群里没有新消息，10秒后重试")
             return@next Step.get(StepTag.STEP_2, delay = 10_000)
         }
 
