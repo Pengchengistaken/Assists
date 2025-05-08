@@ -4,10 +4,10 @@ import android.content.ComponentName
 import android.content.Intent
 import com.ven.assists.AssistsCore
 import com.ven.assists.AssistsCore.click
-import com.ven.assists.AssistsCore.containsText
 import com.ven.assists.AssistsCore.findFirstParentClickable
+import com.ven.assists.AssistsCore.getBoundsInScreen
+import com.ven.assists.AssistsCore.getNodes
 import com.ven.assists.service.AssistsService
-import com.ven.assists.simple.App
 import com.ven.assists.simple.common.LogWrapper
 import com.ven.assists.stepper.Step
 import com.ven.assists.stepper.StepCollector
@@ -31,28 +31,44 @@ class Forward : StepImpl() {
         }
 
         //2. 点击聊天列表中的京东线报交流群
-        collector.next(StepTag.STEP_2) {
-            // 先滑动到顶部
-            AssistsCore.getAllNodes().filter { it.className == "androidx.recyclerview.widget.RecyclerView" || it.className == "android.widget.ListView" }
-                .forEach { listView ->
-                    listView.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD)
+        collector.next(StepTag.STEP_2) { step ->
+            // 1. 双击底部Tab"微信"
+            val tabNodes = AssistsCore.findByText("微信")
+            val screenHeight = com.blankj.utilcode.util.ScreenUtils.getScreenHeight()
+            tabNodes.forEach { node ->
+                val rect = node.getBoundsInScreen()
+                if (rect.top > screenHeight * 0.75) {
+                    node.findFirstParentClickable()?.let { parent ->
+                        parent.click()
+                        Thread.sleep(100)
+                        parent.click()
+                        LogWrapper.logAppend("已双击底部Tab微信")
+                        return@forEach
+                    }
                 }
-            // 尝试模糊查找
-            AssistsCore.getAllNodes().find { it.containsText("京东线报交流群") }?.let {
-                LogWrapper.logAppend("找到京东线报相关群，点击进入")
-                it.findFirstParentClickable()?.let { parent ->
-                    parent.click()
+            }
+
+            // 2. 查找所有聊天行（每一行的 LinearLayout，id=cj0）
+            val allRows = AssistsCore.getAllNodes().filter {
+                it.className == "android.widget.LinearLayout" && it.viewIdResourceName == "com.tencent.mm:id/cj0"
+            }
+
+            // 3. 遍历每一行，递归查找 a_h 和 kbq
+            for (row in allRows) {
+                val allDescendants = row.getNodes() // 递归获取所有后代节点
+                val hasAh = allDescendants.any { it.viewIdResourceName == "com.tencent.mm:id/a_h" }
+                val kbqNode = allDescendants.find { 
+                    it.viewIdResourceName == "com.tencent.mm:id/kbq" && (it.text?.contains("京东线报交流群") == true)
+                }
+                if (hasAh && kbqNode != null) {
+                    kbqNode.findFirstParentClickable()?.click()
+                    LogWrapper.logAppend("已找到并点击京东线报交流群")
                     return@next Step.get(StepTag.STEP_3)
                 }
             }
-            if (AssistsCore.getPackageName() == App.TARGET_PACKAGE_NAME) {
-                AssistsCore.back()
-                return@next Step.get(StepTag.STEP_2)
-            }
-            if (it.repeatCount == 5) {
-                return@next Step.get(StepTag.STEP_1)
-            }
-            return@next Step.repeat
+
+            LogWrapper.logAppend("未找到京东线报交流群，10秒后重试")
+            return@next Step.get(StepTag.STEP_2, delay = 10_000)
         }
 
         // //3. 长按消息
