@@ -102,13 +102,20 @@ class Forward : StepImpl() {
             }
             if (allImageNodes.isEmpty()) {
                 LogWrapper.logAppend("未找到图片消息，3秒后重试")
-                return@next Step.get(StepTag.STEP_3, delay = 3000)
+                return@next Step.get(StepTag.STEP_2, delay = 3000)
             }
             // 2. 取最后一个图片节点
             val lastImageNode = allImageNodes.last()
             // 3. 记录唯一特征（bounds）
-            lastImageBounds = lastImageNode.getBoundsInScreen().toShortString()
-            LogWrapper.logAppend("已记录最后一张图片位置: $lastImageBounds")
+            val currentImageBounds = lastImageNode.getBoundsInScreen().toShortString()
+            LogWrapper.logAppend("当前图片唯一特征: $currentImageBounds，历史特征: $lastImageBounds")
+            if (currentImageBounds == lastImageBounds) {
+                LogWrapper.logAppend("图片未变化，无需转发，发送返回事件，3秒后重试")
+                AssistsCore.back()
+                return@next Step.get(StepTag.STEP_2, delay = 3000)
+            }
+            lastImageBounds = currentImageBounds
+            LogWrapper.logAppend("图片已变化，准备转发")
 
             // 4. 长按图片
             lastImageNode.longClick()
@@ -137,7 +144,7 @@ class Forward : StepImpl() {
                 }
             }
             LogWrapper.logAppend("未找到转发按钮，重试")
-            return@next Step.get(StepTag.STEP_5, delay = 1000)
+            return@next Step.get(StepTag.STEP_2, delay = 1000)
         }
 
         // STEP_5，真正执行点击
@@ -252,8 +259,10 @@ class Forward : StepImpl() {
             }
             if (sendBtn != null) {
                 sendBtn.click()
-                LogWrapper.logAppend("已点击发送按钮，流程结束")
-                return@next Step.none
+                LogWrapper.logAppend("已点击发送按钮，回到上一级菜单")
+                Thread.sleep(2000)
+                AssistsCore.back()
+                return@next Step.get(StepTag.STEP_2, delay = 2000)
             } else {
                 LogWrapper.logAppend("未找到发送按钮，重试")
                 return@next Step.get(StepTag.STEP_10, delay = 1000)
