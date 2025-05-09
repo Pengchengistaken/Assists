@@ -161,18 +161,103 @@ class Forward : StepImpl() {
         }
 
          //6. 选择转发对象
-         collector.next(StepTag.STEP_6) {
+         collector.next(StepTag.STEP_6) { step ->
              LogWrapper.logAppend("选择转发对象")
-             return@next Step.none
+             // 1. 查找并点击"多选"按钮
+             val multiSelectNode = AssistsCore.getAllNodes().find {
+                 it.className == "android.widget.TextView"
+                     && it.text?.toString()?.contains("多选") == true
+                     && it.isClickable
+             }
+             if (multiSelectNode != null) {
+                 multiSelectNode.click()
+                 LogWrapper.logAppend("已点击多选按钮")
+                 return@next Step.get(StepTag.STEP_7, delay = 500)
+             } else {
+                 LogWrapper.logAppend("未找到多选按钮，重试")
+                 return@next Step.get(StepTag.STEP_6, delay = 1000)
+             }
          }
 
-        // //6. 确认转发
-        // collector.next(StepTag.STEP_6) {
-        //     LogWrapper.logAppend("确认转发")
-        //     AssistsCore.getNodes().find { it.containsText("发送") }?.let {
-        //         click(it)
-        //     }
-        //     return@next null
-        // }
+//        collector.next(StepTag.STEP_7) { step ->
+//            val group8Node = AssistsCore.getAllNodes().find {
+//                it.className == "android.widget.TextView"
+//                        && it.text?.toString()?.contains("文件传输助手") == true
+//            }
+//            if (group8Node != null) {
+//                group8Node.findFirstParentClickable()?.click()
+//                LogWrapper.logAppend("已点击文件传输助手")
+//                return@next Step.get(StepTag.STEP_9, delay = 1000)
+//            } else {
+//                LogWrapper.logAppend("未找到文件传输助手，重试")
+//                return@next Step.get(StepTag.STEP_7, delay = 1000)
+//            }
+//        }
+
+        //7. 点击"京东优质线报8群"
+        collector.next(StepTag.STEP_7) { step ->
+            val group8Node = AssistsCore.getAllNodes().find {
+                it.className == "android.widget.TextView"
+                    && it.text?.toString()?.contains("京东优质线报8群") == true
+            }
+            if (group8Node != null) {
+                group8Node.findFirstParentClickable()?.click()
+                LogWrapper.logAppend("已点击京东优质线报8群")
+                return@next Step.get(StepTag.STEP_8, delay = 1000)
+            } else {
+                LogWrapper.logAppend("未找到京东优质线报8群，重试")
+                return@next Step.get(StepTag.STEP_7, delay = 1000)
+            }
+        }
+
+        //8. 点击"京东优质线报9群"
+        collector.next(StepTag.STEP_8) { step ->
+            val group9Node = AssistsCore.getAllNodes().find {
+                it.className == "android.widget.TextView"
+                    && it.text?.toString()?.contains("京东优质线报9群") == true
+            }
+            if (group9Node != null) {
+                group9Node.findFirstParentClickable()?.click()
+                LogWrapper.logAppend("已点击京东优质线报9群")
+                return@next Step.get(StepTag.STEP_9, delay = 1000)
+            } else {
+                LogWrapper.logAppend("未找到京东优质线报9群，重试")
+                return@next Step.get(StepTag.STEP_8, delay = 1000)
+            }
+        }
+
+        //9. 点击"完成"按钮
+        collector.next(StepTag.STEP_9) { step ->
+            val finishBtn = AssistsCore.getAllNodes().find {
+                (it.className == "android.widget.Button" || it.className == "android.widget.TextView")
+                    && it.text?.toString()?.contains("完成") == true
+                    && it.isClickable
+            }
+            if (finishBtn != null) {
+                finishBtn.click()
+                LogWrapper.logAppend("已点击完成按钮")
+                return@next Step.get(StepTag.STEP_10, delay = 800)
+            } else {
+                LogWrapper.logAppend("未找到完成按钮，重试")
+                return@next Step.get(StepTag.STEP_9, delay = 1000)
+            }
+        }
+
+        //10. 点击"发送"按钮
+        collector.next(StepTag.STEP_10) { step ->
+            val sendBtn = AssistsCore.getAllNodes().find {
+                (it.className == "android.widget.Button" || it.className == "android.widget.TextView")
+                    && it.text?.toString()?.contains("发送") == true
+                    && it.isClickable
+            }
+            if (sendBtn != null) {
+                sendBtn.click()
+                LogWrapper.logAppend("已点击发送按钮，流程结束")
+                return@next Step.none
+            } else {
+                LogWrapper.logAppend("未找到发送按钮，重试")
+                return@next Step.get(StepTag.STEP_10, delay = 1000)
+            }
+        }
     }
-} 
+}
