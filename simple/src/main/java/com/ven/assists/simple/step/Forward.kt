@@ -8,6 +8,7 @@ import com.ven.assists.AssistsCore.findFirstParentClickable
 import com.ven.assists.AssistsCore.getBoundsInScreen
 import com.ven.assists.AssistsCore.getNodes
 import com.ven.assists.AssistsCore.longClick
+import com.ven.assists.AssistsCore.scrollForward
 import com.ven.assists.service.AssistsService
 import com.ven.assists.simple.common.LogWrapper
 import com.ven.assists.stepper.Step
@@ -66,8 +67,8 @@ class Forward : StepImpl() {
                 val kbqNode = allDescendants.find { 
                     it.viewIdResourceName == "com.tencent.mm:id/kbq" && (it.text?.contains("京东线报交流群") == true)
                 }
-                if (hasAh && kbqNode != null) {
-//                if (kbqNode != null) { //调试：不需要小红点
+                 if (hasAh && kbqNode != null) {
+ //              if (kbqNode != null) { //调试：不需要小红点
                     kbqNode.findFirstParentClickable()?.click()
                     LogWrapper.logAppend("已找到并点击京东线报交流群")
                     return@next Step.get(StepTag.STEP_3)
@@ -80,6 +81,21 @@ class Forward : StepImpl() {
 
         //3. 获取最后一张图片
         collector.next(StepTag.STEP_3) { step ->
+            // 0. 聊天窗口向上滚动一次（查找ListView或RecyclerView并scrollForward）
+            val listView = AssistsCore.getAllNodes().find {
+                it.className == "android.widget.ListView" || it.className == "androidx.recyclerview.widget.RecyclerView"
+            }
+            if (listView != null) {
+                val result = listView.scrollForward()
+                if (result) {
+                    LogWrapper.logAppend("已向上滚动一次聊天窗口")
+                } else {
+                    LogWrapper.logAppend("聊天窗口无法继续向上滚动")
+                }
+            } else {
+                LogWrapper.logAppend("未找到聊天窗口")
+            }
+
             // 1. 获取所有图片消息节点
             val allImageNodes = AssistsCore.getAllNodes().filter {
                 it.viewIdResourceName == "com.tencent.mm:id/bkg" && it.isClickable && it.isLongClickable
