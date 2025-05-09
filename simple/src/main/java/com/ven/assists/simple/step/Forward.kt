@@ -22,6 +22,7 @@ class Forward : StepImpl() {
     // 用于存储最后一张图片的 bounds
     companion object {
         private var lastImageBounds: String? = null
+        private var DEBUG: Boolean ?= true
     }
 
     override fun onImpl(collector: StepCollector) {
@@ -67,12 +68,15 @@ class Forward : StepImpl() {
                 val kbqNode = allDescendants.find { 
                     it.viewIdResourceName == "com.tencent.mm:id/kbq" && (it.text?.contains("京东线报交流群") == true)
                 }
-                 if (hasAh && kbqNode != null) {
- //              if (kbqNode != null) { //调试：不需要小红点
+               if (DEBUG == true && kbqNode != null) { //调试：不需要小红点
                     kbqNode.findFirstParentClickable()?.click()
                     LogWrapper.logAppend("已找到并点击京东线报交流群")
                     return@next Step.get(StepTag.STEP_3)
-                }
+                } else if (hasAh && kbqNode != null) {
+                   kbqNode.findFirstParentClickable()?.click()
+                   LogWrapper.logAppend("已找到并点击京东线报交流群")
+                   return@next Step.get(StepTag.STEP_3)
+               }
             }
 
             LogWrapper.logAppend("未找到京东线报交流群或者群里没有新消息，10秒后重试")
@@ -186,50 +190,52 @@ class Forward : StepImpl() {
              }
          }
 
-//        collector.next(StepTag.STEP_7) { step ->
-//            val group8Node = AssistsCore.getAllNodes().find {
-//                it.className == "android.widget.TextView"
-//                        && it.text?.toString()?.contains("文件传输助手") == true
-//            }
-//            if (group8Node != null) {
-//                group8Node.findFirstParentClickable()?.click()
-//                LogWrapper.logAppend("已点击文件传输助手")
-//                return@next Step.get(StepTag.STEP_9, delay = 1000)
-//            } else {
-//                LogWrapper.logAppend("未找到文件传输助手，重试")
-//                return@next Step.get(StepTag.STEP_7, delay = 1000)
-//            }
-//        }
+        if (DEBUG == true) {
+            collector.next(StepTag.STEP_7) { step ->
+                val group8Node = AssistsCore.getAllNodes().find {
+                    it.className == "android.widget.TextView"
+                            && it.text?.toString()?.contains("文件传输助手") == true
+                }
+                if (group8Node != null) {
+                    group8Node.findFirstParentClickable()?.click()
+                    LogWrapper.logAppend("已点击文件传输助手")
+                    return@next Step.get(StepTag.STEP_9, delay = 1000)
+                } else {
+                    LogWrapper.logAppend("未找到文件传输助手，重试")
+                    return@next Step.get(StepTag.STEP_7, delay = 1000)
+                }
+            }
+        } else {
+            //7. 点击"京东优质线报8群"
+            collector.next(StepTag.STEP_7) { step ->
+                val group8Node = AssistsCore.getAllNodes().find {
+                    it.className == "android.widget.TextView"
+                            && it.text?.toString()?.contains("京东优质线报8群") == true
+                }
+                if (group8Node != null) {
+                    group8Node.findFirstParentClickable()?.click()
+                    LogWrapper.logAppend("已点击京东优质线报8群")
+                    return@next Step.get(StepTag.STEP_8, delay = 1000)
+                } else {
+                    LogWrapper.logAppend("未找到京东优质线报8群，重试")
+                    return@next Step.get(StepTag.STEP_7, delay = 1000)
+                }
+            }
 
-        //7. 点击"京东优质线报8群"
-        collector.next(StepTag.STEP_7) { step ->
-            val group8Node = AssistsCore.getAllNodes().find {
-                it.className == "android.widget.TextView"
-                    && it.text?.toString()?.contains("京东优质线报8群") == true
-            }
-            if (group8Node != null) {
-                group8Node.findFirstParentClickable()?.click()
-                LogWrapper.logAppend("已点击京东优质线报8群")
-                return@next Step.get(StepTag.STEP_8, delay = 1000)
-            } else {
-                LogWrapper.logAppend("未找到京东优质线报8群，重试")
-                return@next Step.get(StepTag.STEP_7, delay = 1000)
-            }
-        }
-
-        //8. 点击"京东优质线报9群"
-        collector.next(StepTag.STEP_8) { step ->
-            val group9Node = AssistsCore.getAllNodes().find {
-                it.className == "android.widget.TextView"
-                    && it.text?.toString()?.contains("京东优质线报9群") == true
-            }
-            if (group9Node != null) {
-                group9Node.findFirstParentClickable()?.click()
-                LogWrapper.logAppend("已点击京东优质线报9群")
-                return@next Step.get(StepTag.STEP_9, delay = 1000)
-            } else {
-                LogWrapper.logAppend("未找到京东优质线报9群，重试")
-                return@next Step.get(StepTag.STEP_8, delay = 1000)
+            //8. 点击"京东优质线报9群"
+            collector.next(StepTag.STEP_8) { step ->
+                val group9Node = AssistsCore.getAllNodes().find {
+                    it.className == "android.widget.TextView"
+                            && it.text?.toString()?.contains("京东优质线报9群") == true
+                }
+                if (group9Node != null) {
+                    group9Node.findFirstParentClickable()?.click()
+                    LogWrapper.logAppend("已点击京东优质线报9群")
+                    return@next Step.get(StepTag.STEP_9, delay = 1000)
+                } else {
+                    LogWrapper.logAppend("未找到京东优质线报9群，重试")
+                    return@next Step.get(StepTag.STEP_8, delay = 1000)
+                }
             }
         }
 
@@ -259,14 +265,58 @@ class Forward : StepImpl() {
             }
             if (sendBtn != null) {
                 sendBtn.click()
-                LogWrapper.logAppend("已点击发送按钮，回到上一级菜单")
-                Thread.sleep(2000)
-                AssistsCore.back()
-                return@next Step.get(StepTag.STEP_2, delay = 2000)
+                LogWrapper.logAppend("已点击发送按钮，准备查找最新文字消息")
+                return@next Step.get(StepTag.STEP_11, delay = 1000)
             } else {
                 LogWrapper.logAppend("未找到发送按钮，重试")
                 return@next Step.get(StepTag.STEP_10, delay = 1000)
             }
         }
+
+        // 11. 查找"阿汤哥会爆单吗@自在极意京粉线报"发送的最新一条文字消息，并log输出
+        collector.next(StepTag.STEP_11) { step ->
+            val allMsgBlocks = AssistsCore.getAllNodes().filter {
+                it.className == "android.widget.RelativeLayout" && it.viewIdResourceName == "com.tencent.mm:id/bn1"
+            }
+
+            val targetSender = "阿汤哥会爆单吗＠自在极意京粉线报"
+            var latestMsg: String? = null
+
+            // 倒序遍历，优先取最新
+            for (msgBlock in allMsgBlocks.reversed()) {
+                // 1. 查找昵称节点
+                val senderNode = msgBlock.getNodes().find {
+                    it.className == "android.widget.TextView"
+                        && it.viewIdResourceName == "com.tencent.mm:id/brc"
+                        && it.text?.toString()?.contains(targetSender) == true
+                }
+                if (senderNode != null) {
+                    // 2. 查找消息内容节点
+                    val contentNode = msgBlock.getNodes().find {
+                        it.className == "android.widget.TextView"
+                            && it.viewIdResourceName == "com.tencent.mm:id/bkl"
+                            && !it.text.isNullOrBlank()
+                    }
+                    if (contentNode != null) {
+                        latestMsg = contentNode.text?.toString()
+                        break
+                    }
+                }
+            }
+
+            if (latestMsg != null) {
+                val processedMsg = processText(latestMsg)
+                LogWrapper.logAppend("阿汤哥最新消息内容: $processedMsg")
+            } else {
+                LogWrapper.logAppend("未找到目标发送者的消息")
+            }
+            return@next Step.none
+        }
+    }
+
+    // 简单的文字处理函数，可根据需要扩展
+    private fun processText(text: String): String {
+        // 示例：去除首尾空格、换行、表情符号等
+        return text.trim().replace("\n", " ")
     }
 }
