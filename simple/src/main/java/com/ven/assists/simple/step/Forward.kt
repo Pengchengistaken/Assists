@@ -2,7 +2,6 @@ package com.ven.assists.simple.step
 
 import android.content.ComponentName
 import android.content.Intent
-import android.util.Log
 import com.blankj.utilcode.util.ScreenUtils
 import com.ven.assists.AssistsCore
 import com.ven.assists.AssistsCore.click
@@ -10,7 +9,6 @@ import com.ven.assists.AssistsCore.findFirstParentClickable
 import com.ven.assists.AssistsCore.getBoundsInScreen
 import com.ven.assists.AssistsCore.getNodes
 import com.ven.assists.AssistsCore.longClick
-import com.ven.assists.AssistsCore.scrollForward
 import com.ven.assists.service.AssistsService
 import com.ven.assists.simple.common.LogWrapper
 import com.ven.assists.stepper.Step
