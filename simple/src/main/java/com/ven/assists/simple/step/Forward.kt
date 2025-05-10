@@ -3,6 +3,7 @@ package com.ven.assists.simple.step
 import android.content.ComponentName
 import android.content.Intent
 import android.util.Log
+import com.blankj.utilcode.util.ScreenUtils
 import com.ven.assists.AssistsCore
 import com.ven.assists.AssistsCore.click
 import com.ven.assists.AssistsCore.findFirstParentClickable
@@ -15,6 +16,8 @@ import com.ven.assists.simple.common.LogWrapper
 import com.ven.assists.stepper.Step
 import com.ven.assists.stepper.StepCollector
 import com.ven.assists.stepper.StepImpl
+import com.ven.assists.window.AssistsWindowManager
+import kotlinx.coroutines.delay
 
 /**
  * 转发功能实现
@@ -23,6 +26,7 @@ class Forward : StepImpl() {
     // 用于存储最后一张图片的 bounds
     companion object {
         private var lastImageBounds: String? = null
+        private var lastTextMsg: String? = null // 新增：记录上一次的文字消息内容
         private var DEBUG: Boolean ?= true
     }
 
@@ -49,7 +53,7 @@ class Forward : StepImpl() {
                 if (rect.top > screenHeight * 0.75) {
                     node.findFirstParentClickable()?.let { parent ->
                         parent.click()
-                        Thread.sleep(200)
+                        Thread.sleep(100)
                         parent.click()
                         LogWrapper.logAppend("已双击底部Tab微信")
                         return@forEach
@@ -85,20 +89,19 @@ class Forward : StepImpl() {
 
         //3. 获取最后一张图片
         collector.next(StepTag.STEP_3) { step ->
-            // 0. 聊天窗口向上滚动一次（查找ListView或RecyclerView并scrollForward）
-            val listView = AssistsCore.getAllNodes().find {
-                it.className == "android.widget.ListView" || it.className == "androidx.recyclerview.widget.RecyclerView"
-            }
-            if (listView != null) {
-                val result = listView.scrollForward()
-                if (result) {
-                    LogWrapper.logAppend("已向上滚动一次聊天窗口")
-                } else {
-                    LogWrapper.logAppend("聊天窗口无法继续向上滚动")
-                }
-            } else {
-                LogWrapper.logAppend("未找到聊天窗口")
-            }
+            //滑动一下聊天窗口
+            AssistsWindowManager.nonTouchableByAll()
+            delay(250)
+            val x = ScreenUtils.getAppScreenWidth() / 2F
+            val distance = ScreenUtils.getAppScreenHeight() / 2F
+            val startY = distance + distance / 2F
+            val endY = distance - distance / 2F
+            LogWrapper.logAppend("滑动：$x/$startY,$x/$endY")
+            AssistsCore.gesture(
+                floatArrayOf(x, startY), floatArrayOf(x, endY), 0, 1000L
+            )
+            AssistsWindowManager.touchableByAll()
+            delay(1000)
 
             // 1. 获取所有图片消息节点
             val allImageNodes = AssistsCore.getAllNodes().filter {
@@ -123,12 +126,15 @@ class Forward : StepImpl() {
             LogWrapper.logAppend("图片已变化，准备转发")
 
             // 4. 长按图片
-            Thread.sleep(2500)
-            lastImageNode.longClick()
-            LogWrapper.logAppend("已长按图片，准备点击转发")
-
-            // 5. 进入下一步，等待弹窗出现
-            return@next Step.get(StepTag.STEP_4, delay = 2000)
+            if (lastImageNode.isVisibleToUser && lastImageNode.isLongClickable && lastImageNode.isEnabled) {
+                LogWrapper.logAppend("节点可交互，准备长按: bounds=${lastImageNode.getBoundsInScreen()}")
+                lastImageNode.longClick()
+                return@next Step.get(StepTag.STEP_4, delay = 1000)
+            } else {
+                LogWrapper.logAppend("节点不可交互，isVisibleToUser=${lastImageNode.isVisibleToUser}, isLongClickable=${lastImageNode.isLongClickable}, isEnabled=${lastImageNode.isEnabled}")
+                // 延迟重试
+                return@next Step.get(StepTag.STEP_3, delay = 1000)
+            }
         }
 
         //4. 查找并点击"转发"按钮
@@ -150,6 +156,8 @@ class Forward : StepImpl() {
                 }
             }
             LogWrapper.logAppend("未找到转发按钮，重试")
+            Thread.sleep(1500)
+            lastImageBounds = null
             AssistsCore.back()
             return@next Step.get(StepTag.STEP_2, delay = 1000)
         }
@@ -284,6 +292,7 @@ class Forward : StepImpl() {
 
             val targetSender = "阿汤哥会爆单吗＠自在极意京粉线报"
             var latestMsg: String? = null
+            var latestMsgNode: android.view.accessibility.AccessibilityNodeInfo? = null
 
             // 倒序遍历，优先取最新
             for (msgBlock in allMsgBlocks.reversed()) {
@@ -302,25 +311,50 @@ class Forward : StepImpl() {
                     }
                     if (contentNode != null) {
                         latestMsg = contentNode.text?.toString()
+                        latestMsgNode = contentNode
                         break
                     }
                 }
             }
 
-            if (latestMsg != null) {
-                val processedMsg = processText(latestMsg)
-                Log.d("阿汤哥最新消息内容:", processedMsg)
-                LogWrapper.logAppend("阿汤哥最新消息内容: $processedMsg")
-            } else {
-                LogWrapper.logAppend("未找到目标发送者的消息")
+            // 对比与上次内容
+            if (latestMsg == null || latestMsg == lastTextMsg) {
+                AssistsCore.back()
+                return@next Step.get(StepTag.STEP_2, delay = 1000)
             }
+
+            // 内容有变化，复制内容并处理
+            lastTextMsg = latestMsg
+            val processedMsg = processAtangText(latestMsg)
+            // 复制到剪贴板（如有需要）
+            latestMsgNode?.let { node ->
+                // 这里可以用 node.longClick() 或 node.click() 后再用 AssistsCore 相关API复制
+                // 也可以直接用系统API复制文本
+                val clipboard = android.content.ClipboardManager::class.java
+                val context = AssistsService.instance
+                val clip = android.content.ClipData.newPlainText("msg", processedMsg)
+                (context?.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager)?.setPrimaryClip(clip)
+                LogWrapper.logAppend("已复制最新消息到剪贴板")
+            }
+            LogWrapper.logAppend("阿汤哥最新消息内容: $processedMsg")
             return@next Step.none
         }
     }
 
-    // 简单的文字处理函数，可根据需要扩展
-    private fun processText(text: String): String {
-        // 示例：去除首尾空格、换行、表情符号等
-        return text.trim().replace("\n", " ")
+    // 处理阿汤哥的文字
+    private fun processAtangText(text: String): String {
+        // 替换 .cn 为指定字符串
+        return text.replace(".cn", "FKD4RaByh_7pz")
+    }
+
+    // 处理京粉的文字
+    private fun processJingfenText(text: String): String {
+        // 只处理包含 jd.com 的消息
+        // 如果包含指定字符串，替换回.cn
+        var content = text.replace("FKD4RaByh_7pz", ".cn")
+        if (!content.contains("jd.com")) {
+            return ""
+        }
+        return content
     }
 }
