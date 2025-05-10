@@ -334,11 +334,13 @@ class Forward : StepImpl() {
             lastTextMsg = latestMsg
             val processedMsg = processAtangText(latestMsg)
             latestMsgNode?.let { node ->
-                val clipboard = android.content.ClipboardManager::class.java
-                val context = AssistsService.instance
+                val clipboard = AssistsService.instance?.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
                 val clip = android.content.ClipData.newPlainText("msg", processedMsg)
-                (context?.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager)?.setPrimaryClip(clip)
-                LogWrapper.logAppend("已复制最新消息到剪贴板")
+                clipboard?.setPrimaryClip(clip)
+                LogWrapper.logAppend("已复制最新消息到剪贴板: $processedMsg")
+                // 验证剪贴板内容
+                val clipText = clipboard?.primaryClip?.getItemAt(0)?.text?.toString()
+                LogWrapper.logAppend("验证剪贴板内容: $clipText")
             }
             LogWrapper.logAppend("阿汤哥最新消息内容: $processedMsg")
             AssistsCore.back()
@@ -408,19 +410,21 @@ class Forward : StepImpl() {
                     && it.isClickable && it.isEnabled && it.isFocusable
             }
             if (editTextNode != null) {
-                editTextNode.click()
-                // 粘贴剪贴板内容
-                val clipboard = AssistsService.instance?.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
-                val clip = clipboard?.primaryClip
-                val text = clip?.getItemAt(0)?.coerceToText(AssistsService.instance)?.toString() ?: ""
-                if (text.isNotBlank()) {
-                    editTextNode.setNodeText(text)
-                    LogWrapper.logAppend("已粘贴内容到输入框")
+                // 长按输入框
+                val longClickResult = editTextNode.longClick()
+                LogWrapper.logAppend("长按输入框结果: $longClickResult")
+                delay(500) // 等待菜单出现
+
+                // 点击固定坐标的"粘贴"按钮
+                val clickResult = AssistsCore.gestureClick(120f, 2180f)
+                LogWrapper.logAppend("点击粘贴按钮结果: $clickResult")
+                if (clickResult) {
+                    LogWrapper.logAppend("已点击粘贴按钮")
+                    return@next Step.get(StepTag.STEP_15, delay = 1000)
                 } else {
-                    LogWrapper.logAppend("剪贴板无内容，重试")
+                    LogWrapper.logAppend("点击粘贴按钮失败，重试")
                     return@next Step.get(StepTag.STEP_14, delay = 1000)
                 }
-                return@next Step.get(StepTag.STEP_15, delay = 1000)
             } else {
                 LogWrapper.logAppend("未找到输入框，重试")
                 return@next Step.get(StepTag.STEP_14, delay = 1000)
