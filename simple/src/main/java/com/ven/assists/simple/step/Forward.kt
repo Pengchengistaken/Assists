@@ -2,6 +2,7 @@ package com.ven.assists.simple.step
 
 import android.content.ComponentName
 import android.content.Intent
+import android.util.Log
 import com.ven.assists.AssistsCore
 import com.ven.assists.AssistsCore.click
 import com.ven.assists.AssistsCore.findFirstParentClickable
@@ -48,14 +49,13 @@ class Forward : StepImpl() {
                 if (rect.top > screenHeight * 0.75) {
                     node.findFirstParentClickable()?.let { parent ->
                         parent.click()
-                        Thread.sleep(100)
+                        Thread.sleep(200)
                         parent.click()
                         LogWrapper.logAppend("已双击底部Tab微信")
                         return@forEach
                     }
                 }
             }
-
             // 2. 查找所有聊天行（每一行的 LinearLayout，id=cj0）
             val allRows = AssistsCore.getAllNodes().filter {
                 it.className == "android.widget.LinearLayout" && it.viewIdResourceName == "com.tencent.mm:id/cj0"
@@ -106,6 +106,7 @@ class Forward : StepImpl() {
             }
             if (allImageNodes.isEmpty()) {
                 LogWrapper.logAppend("未找到图片消息，3秒后重试")
+                AssistsCore.back()
                 return@next Step.get(StepTag.STEP_2, delay = 3000)
             }
             // 2. 取最后一个图片节点
@@ -122,6 +123,7 @@ class Forward : StepImpl() {
             LogWrapper.logAppend("图片已变化，准备转发")
 
             // 4. 长按图片
+            Thread.sleep(2500)
             lastImageNode.longClick()
             LogWrapper.logAppend("已长按图片，准备点击转发")
 
@@ -148,6 +150,7 @@ class Forward : StepImpl() {
                 }
             }
             LogWrapper.logAppend("未找到转发按钮，重试")
+            AssistsCore.back()
             return@next Step.get(StepTag.STEP_2, delay = 1000)
         }
 
@@ -306,6 +309,7 @@ class Forward : StepImpl() {
 
             if (latestMsg != null) {
                 val processedMsg = processText(latestMsg)
+                Log.d("阿汤哥最新消息内容:", processedMsg)
                 LogWrapper.logAppend("阿汤哥最新消息内容: $processedMsg")
             } else {
                 LogWrapper.logAppend("未找到目标发送者的消息")
