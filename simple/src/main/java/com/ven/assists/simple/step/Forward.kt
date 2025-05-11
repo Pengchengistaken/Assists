@@ -669,6 +669,6 @@ class Forward : StepImpl() {
         if (!content.contains("jd.com")) {
             return ""
         }
-        return content + "\n\n\n防失联，关注公众号：小小阿土哥"
+        return content + "\n\n\n防失联，关注服务号：小小阿土哥"
     }
 }
