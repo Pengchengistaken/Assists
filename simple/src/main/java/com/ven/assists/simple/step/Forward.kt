@@ -575,7 +575,7 @@ class Forward : StepImpl() {
                     if (sendBtn != null) {
                         sendBtn.click()
                         LogWrapper.logAppend("已点击发送按钮，完成所有步骤")
-                        return@next Step.none
+                        return@next Step.get(StepTag.STEP_19, delay = 1000)
                     } else {
                         LogWrapper.logAppend("未找到发送按钮，重试")
                         return@next Step.get(StepTag.STEP_18, delay = 1000)
@@ -587,6 +587,53 @@ class Forward : StepImpl() {
             } else {
                 LogWrapper.logAppend("未找到输入框，重试")
                 return@next Step.get(StepTag.STEP_18, delay = 1000)
+            }
+        }
+
+        //19. 查找最新消息并转发
+        collector.next(StepTag.STEP_19) { step ->
+            LogWrapper.logAppend("STEP_19: 开始查找最新消息")
+            // 1. 获取所有消息块
+            val allMsgBlocks = AssistsCore.getAllNodes().filter {
+                it.className == "android.widget.RelativeLayout" && it.viewIdResourceName == "com.tencent.mm:id/bn1"
+            }
+
+            // 2. 查找最新的文字消息
+            val latestMsgNode = allMsgBlocks.reversed().firstNotNullOfOrNull { msgBlock ->
+                msgBlock.getNodes().find {
+                    it.className == "android.widget.TextView"
+                        && it.viewIdResourceName == "com.tencent.mm:id/bkl"
+                        && !it.text.isNullOrBlank()
+                }
+            }
+
+            if (latestMsgNode != null) {
+                LogWrapper.logAppend("已找到最新消息，准备双击")
+                // 3. 双击消息
+                AssistsCore.gestureClick(800f, 2100f)
+                delay(200)
+                AssistsCore.gestureClick(800f, 2100f)
+                LogWrapper.logAppend("双击右下角，展开消息全屏，开始分享")
+                delay(3000)
+
+                // 4. 查找并点击"分享"按钮
+                val shareButton = AssistsCore.getAllNodes().find {
+                    it.className == "android.widget.ImageButton"
+                        && it.contentDescription?.toString() == "分享"
+                        && it.isClickable
+                }
+                
+                if (shareButton != null) {
+                    shareButton.click()
+                    LogWrapper.logAppend("已点击分享按钮")
+                    return@next Step.get(StepTag.STEP_6, delay = 1000)
+                }else{
+                    LogWrapper.logAppend("未找到分享按钮，停止")
+                    return@next Step.none
+                }
+            } else {
+                LogWrapper.logAppend("未找到最新消息，重试")
+                return@next Step.get(StepTag.STEP_19, delay = 1000)
             }
         }
     }
