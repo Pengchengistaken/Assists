@@ -120,9 +120,9 @@ class Forward : StepImpl() {
             val currentImageBounds = lastImageNode.getBoundsInScreen().toShortString()
             LogWrapper.logAppend("当前图片唯一特征: $currentImageBounds，历史特征: $lastImageBounds")
             if (currentImageBounds == lastImageBounds) {
-                LogWrapper.logAppend("图片未变化，无需转发，发送返回事件，3秒后重试")
+                LogWrapper.logAppend("图片未变化，无需转发，发送返回事件，10秒后重试")
                 AssistsCore.back()
-                return@next Step.get(StepTag.STEP_2, delay = 3000)
+                return@next Step.get(StepTag.STEP_2, delay = 10000)
             }
             lastImageBounds = currentImageBounds
             LogWrapper.logAppend("图片已变化，准备转发")
@@ -359,12 +359,9 @@ class Forward : StepImpl() {
                 val clip = android.content.ClipData.newPlainText("msg", processedMsg)
                 clipboard?.setPrimaryClip(clip)
                 LogWrapper.logAppend("已复制最新消息到剪贴板: $processedMsg")
-                // 验证剪贴板内容
-                val clipText = clipboard?.primaryClip?.getItemAt(0)?.text?.toString()
-                LogWrapper.logAppend("验证剪贴板内容: $clipText")
+                LogWrapper.logAppend("阿汤哥最新消息内容: $processedMsg")
+                AssistsCore.back()
             }
-            LogWrapper.logAppend("阿汤哥最新消息内容: $processedMsg")
-            AssistsCore.back()
             return@next Step.get(StepTag.STEP_12, delay = 1000)
         }
 
@@ -508,9 +505,6 @@ class Forward : StepImpl() {
                         val clip = android.content.ClipData.newPlainText("msg", processedMsg)
                         clipboard?.setPrimaryClip(clip)
                         LogWrapper.logAppend("已复制处理后的消息到剪贴板: $processedMsg")
-                        // 验证剪贴板内容
-                        val clipText = clipboard?.primaryClip?.getItemAt(0)?.text?.toString()
-                        LogWrapper.logAppend("验证剪贴板内容: $clipText")
                     }
                     AssistsCore.back()
                     return@next Step.get(StepTag.STEP_17, delay = 1000)
