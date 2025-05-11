@@ -9,6 +9,7 @@ import com.ven.assists.AssistsCore.findFirstParentClickable
 import com.ven.assists.AssistsCore.getBoundsInScreen
 import com.ven.assists.AssistsCore.getNodes
 import com.ven.assists.AssistsCore.longClick
+import com.ven.assists.AssistsCore.nodeGestureClickByDouble
 import com.ven.assists.AssistsCore.scrollForward
 import com.ven.assists.AssistsCore.setNodeText
 import com.ven.assists.service.AssistsService
@@ -28,6 +29,7 @@ class Forward : StepImpl() {
         private var lastImageBounds: String? = null
         private var lastTextMsg: String? = null // 新增：记录上一次的文字消息内容
         private var DEBUG: Boolean ?= true
+        private var isLastMsgText: Boolean ?= false
     }
 
     override fun onImpl(collector: StepCollector) {
@@ -175,6 +177,8 @@ class Forward : StepImpl() {
                 if (clickableParent != null) {
                     clickableParent.click()
                     LogWrapper.logAppend("已点击转发按钮")
+                    isLastMsgText = false
+                    LogWrapper.logAppend("设置 isLastMsgText 为 false")
                     return@next Step.get(StepTag.STEP_6)
                 }
             }
@@ -276,8 +280,25 @@ class Forward : StepImpl() {
             }
             if (sendBtn != null) {
                 sendBtn.click()
-                LogWrapper.logAppend("已点击发送按钮，准备查找最新文字消息")
-                return@next Step.get(StepTag.STEP_11, delay = 1000)
+                if (isLastMsgText == true) {
+                    LogWrapper.logAppend("已点击发送按钮，准备查找最新图片消息")
+                    Thread.sleep(2000)
+                    if (AssistsCore.back()) {
+                        LogWrapper.logAppend("返回一次")
+                    }
+                    Thread.sleep(2000)
+                    if (AssistsCore.back()) {
+                        LogWrapper.logAppend("返回两次")
+                    }
+                    Thread.sleep(2000)
+                    if (AssistsCore.back()) {
+                        LogWrapper.logAppend("返回三次")
+                    }
+                    return@next Step.get(StepTag.STEP_2, delay = 3000)
+                } else {
+                    LogWrapper.logAppend("已点击发送按钮，准备查找最新文字消息")
+                    return@next Step.get(StepTag.STEP_11, delay = 1000)
+                }
             } else {
                 LogWrapper.logAppend("未找到发送按钮，重试")
                 return@next Step.get(StepTag.STEP_10, delay = 1000)
@@ -626,6 +647,8 @@ class Forward : StepImpl() {
                 if (shareButton != null) {
                     shareButton.click()
                     LogWrapper.logAppend("已点击分享按钮")
+                    isLastMsgText = true
+                    LogWrapper.logAppend("设置 isLastMsgText 为 true")
                     return@next Step.get(StepTag.STEP_6, delay = 1000)
                 }else{
                     LogWrapper.logAppend("未找到分享按钮，停止")
@@ -652,6 +675,6 @@ class Forward : StepImpl() {
         if (!content.contains("jd.com")) {
             return ""
         }
-        return content
+        return content + "\n\n\n防失联，关注公众号：小小阿土哥"
     }
 }
