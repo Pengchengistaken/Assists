@@ -120,9 +120,9 @@ class Forward : StepImpl() {
             val currentImageBounds = lastImageNode.getBoundsInScreen().toShortString()
             LogWrapper.logAppend("当前图片唯一特征: $currentImageBounds，历史特征: $lastImageBounds")
             if (currentImageBounds == lastImageBounds) {
-                LogWrapper.logAppend("图片未变化，无需转发，发送返回事件，10秒后重试")
+                LogWrapper.logAppend("图片未变化，无需转发，发送返回事件，30秒后重试")
                 AssistsCore.back()
-                return@next Step.get(StepTag.STEP_2, delay = 10000)
+                return@next Step.get(StepTag.STEP_2, delay = 30000)
             }
             lastImageBounds = currentImageBounds
             LogWrapper.logAppend("图片已变化，准备转发")
