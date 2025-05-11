@@ -440,11 +440,153 @@ class Forward : StepImpl() {
             }
             if (sendBtn != null) {
                 sendBtn.click()
-                LogWrapper.logAppend("已点击发送按钮，流程结束")
-                return@next Step.none
+                LogWrapper.logAppend("已点击发送按钮，进入下一步")
+                return@next Step.get(StepTag.STEP_16, delay = 5000)
             } else {
                 LogWrapper.logAppend("未找到发送按钮，重试")
                 return@next Step.get(StepTag.STEP_15, delay = 1000)
+            }
+        }
+
+        collector.next(StepTag.STEP_16) { step ->
+            LogWrapper.logAppend("STEP_16: 查找京粉最新文字消息")
+            
+            // 1. 获取所有消息块
+            val allMsgBlocks = AssistsCore.getAllNodes().filter {
+                it.className == "android.widget.RelativeLayout" && it.viewIdResourceName == "com.tencent.mm:id/bn1"
+            }
+
+            // 2. 查找京粉发送的最新文字消息
+            var latestMsg: String? = null
+            var latestMsgNode: android.view.accessibility.AccessibilityNodeInfo? = null
+
+            // 倒序遍历，优先取最新
+            for (msgBlock in allMsgBlocks.reversed()) {
+                // 查找消息内容节点
+                val contentNode = msgBlock.getNodes().find {
+                    it.className == "android.widget.TextView"
+                        && it.viewIdResourceName == "com.tencent.mm:id/bkl"
+                        && !it.text.isNullOrBlank()
+                }
+                
+                if (contentNode != null) {
+                    latestMsg = contentNode.text?.toString()
+                    latestMsgNode = contentNode
+                    break
+                }
+            }
+
+            val finalLatestMsg = latestMsg
+            if (finalLatestMsg != null) {
+                // 3. 处理消息内容
+                val processedMsg = processJingfenText(finalLatestMsg)
+                if (processedMsg.isNotEmpty()) {
+                    // 4. 复制到剪贴板
+                    latestMsgNode?.let { node ->
+                        val clipboard = AssistsService.instance?.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+                        val clip = android.content.ClipData.newPlainText("msg", processedMsg)
+                        clipboard?.setPrimaryClip(clip)
+                        LogWrapper.logAppend("已复制处理后的消息到剪贴板: $processedMsg")
+                        // 验证剪贴板内容
+                        val clipText = clipboard?.primaryClip?.getItemAt(0)?.text?.toString()
+                        LogWrapper.logAppend("验证剪贴板内容: $clipText")
+                    }
+                    AssistsCore.back()
+                    return@next Step.get(StepTag.STEP_17, delay = 1000)
+                } else {
+                    LogWrapper.logAppend("消息内容不包含jd.com链接，跳过处理")
+                    AssistsCore.back()
+                    return@next Step.get(StepTag.STEP_17, delay = 1000)
+                }
+            } else {
+                LogWrapper.logAppend("未找到京粉的文字消息，重试")
+                return@next Step.get(StepTag.STEP_16, delay = 1000)
+            }
+        }
+
+        //17. 双击顶部微信并进入文件传输助手
+        collector.next(StepTag.STEP_17) { step ->
+            LogWrapper.logAppend("STEP_17: 开始查找顶部微信")
+            // 1. 查找顶部的"微信"文本
+            val wechatNode = AssistsCore.getAllNodes().find {
+                it.className == "android.widget.TextView"
+                    && it.viewIdResourceName == "android:id/text1"
+                    && it.text?.toString() == "微信"
+            }
+            
+            if (wechatNode != null) {
+                // 双击"微信"
+                wechatNode.findFirstParentClickable()?.let { parent ->
+                    parent.click()
+                    delay(100)
+                    parent.click()
+                    LogWrapper.logAppend("已双击顶部微信")
+                }
+            } else {
+                LogWrapper.logAppend("未找到顶部微信，重试")
+                return@next Step.get(StepTag.STEP_17, delay = 1000)
+            }
+
+            // 2. 查找并点击"文件传输助手"
+            val fileTransferNode = AssistsCore.getAllNodes().find {
+                it.className == "android.view.View"
+                    && it.viewIdResourceName == "com.tencent.mm:id/kbq"
+                    && it.text?.toString() == "文件传输助手"
+            }
+
+            if (fileTransferNode != null) {
+                fileTransferNode.findFirstParentClickable()?.click()
+                LogWrapper.logAppend("已点击文件传输助手")
+                return@next Step.get(StepTag.STEP_18, delay = 1000)
+            } else {
+                LogWrapper.logAppend("未找到文件传输助手，重试")
+                return@next Step.get(StepTag.STEP_17, delay = 1000)
+            }
+        }
+
+        //18. 在文件传输助手中粘贴内容并发送
+        collector.next(StepTag.STEP_18) { step ->
+            LogWrapper.logAppend("STEP_18: 开始查找输入框")
+            // 1. 查找输入框
+            val editTextNode = AssistsCore.getAllNodes().find {
+                it.className == "android.widget.EditText"
+                    && it.viewIdResourceName == "com.tencent.mm:id/bkk"
+                    && it.isClickable && it.isEnabled && it.isFocusable
+            }
+            
+            if (editTextNode != null) {
+                // 2. 长按输入框
+                val longClickResult = editTextNode.longClick()
+                LogWrapper.logAppend("长按输入框结果: $longClickResult")
+                delay(500) // 等待菜单出现
+
+                // 3. 点击固定坐标的"粘贴"按钮
+                val clickResult = AssistsCore.gestureClick(120f, 2180f)
+                LogWrapper.logAppend("点击粘贴按钮结果: $clickResult")
+                if (clickResult) {
+                    LogWrapper.logAppend("已点击粘贴按钮")
+                    delay(1000) // 等待粘贴完成
+
+                    // 4. 查找并点击发送按钮
+                    val sendBtn = AssistsCore.getAllNodes().find {
+                        (it.className == "android.widget.Button" || it.className == "android.widget.TextView")
+                            && it.text?.contains("发送") == true && it.isClickable
+                    }
+                    if (sendBtn != null) {
+                        sendBtn.click()
+                        LogWrapper.logAppend("已点击发送按钮，完成所有步骤")
+                        return@next Step.none
+                    } else {
+                        LogWrapper.logAppend("未找到发送按钮，重试")
+                        return@next Step.get(StepTag.STEP_18, delay = 1000)
+                    }
+                } else {
+                    LogWrapper.logAppend("点击粘贴按钮失败，重试")
+                    return@next Step.get(StepTag.STEP_18, delay = 1000)
+                }
+            } else {
+                LogWrapper.logAppend("未找到输入框，重试")
+                return@next Step.get(StepTag.STEP_18, delay = 1000)
             }
         }
     }
