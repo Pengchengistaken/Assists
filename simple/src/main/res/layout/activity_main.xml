@@ -33,21 +33,23 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:backgroundTint="@color/colorAccent"
-                android:text="基础" />
+                android:text="基础"
+                android:visibility="gone" />
 
             <Button
                 android:id="@+id/btn_pro"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:backgroundTint="@color/colorAccent"
-                android:text="进阶" />
+                android:text="进阶"
+                android:visibility="gone" />
 
             <Button
                 android:id="@+id/btn_advanced"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:backgroundTint="@color/colorAccent"
-                android:text="高级" />
+                android:text="自动转发京粉线报" />
 
             <Button
                 android:id="@+id/btn_web"
@@ -55,7 +57,8 @@
                 android:layout_height="wrap_content"
                 android:backgroundTint="@color/colorAccent"
                 android:text="Web支持"
-                android:textAllCaps="false" />
+                android:textAllCaps="false"
+                android:visibility="gone" />
 
         </LinearLayout>
 

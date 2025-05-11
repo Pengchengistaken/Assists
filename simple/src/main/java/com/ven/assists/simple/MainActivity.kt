@@ -24,8 +24,12 @@ import com.ven.assists.service.AssistsServiceListener
 import com.ven.assists.simple.databinding.ActivityMainBinding
 import com.ven.assists.simple.overlays.OverlayAdvanced
 import com.ven.assists.simple.overlays.OverlayBasic
+import com.ven.assists.simple.overlays.OverlayLog
 import com.ven.assists.simple.overlays.OverlayPro
 import com.ven.assists.simple.overlays.OverlayWeb
+import com.ven.assists.simple.step.Forward
+import com.ven.assists.simple.step.StepTag
+import com.ven.assists.stepper.StepManager
 import com.ven.assists.utils.CoroutineWrapper
 import com.ven.assists.utils.NodeClassValue
 import kotlinx.coroutines.delay
@@ -60,14 +64,8 @@ class MainActivity : AppCompatActivity(), AssistsServiceListener {
                 }
             }
             btnAdvanced.setOnClickListener {
-                OverlayAdvanced.onClose = {
-                    OverlayAdvanced.hide()
-                }
-                if (OverlayAdvanced.showed) {
-                    OverlayAdvanced.hide()
-                } else {
-                    OverlayAdvanced.show()
-                }
+                OverlayLog.show()
+                StepManager.execute(Forward::class.java, StepTag.STEP_1, begin = true)
             }
             btnWeb.setOnClickListener {
                 OverlayWeb.onClose = {
