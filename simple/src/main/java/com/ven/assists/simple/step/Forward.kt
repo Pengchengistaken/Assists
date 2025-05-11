@@ -85,8 +85,8 @@ class Forward : StepImpl() {
                }
             }
 
-            LogWrapper.logAppend("未找到京东线报交流群或者群里没有新消息，10秒后重试")
-            return@next Step.get(StepTag.STEP_2, delay = 10_000)
+            LogWrapper.logAppend("未找到京东线报交流群或者群里没有新消息，30秒后重试")
+            return@next Step.get(StepTag.STEP_2, delay = 30_000)
         }
 
         //3. 获取最后一张图片
