@@ -30,34 +30,6 @@ class Forward : StepImpl() {
         private var lastTextMsg: String? = null // 新增：记录上一次的文字消息内容
         private var DEBUG: Boolean ?= false
         private var isLastMsgText: Boolean ?= false
-
-        // 查找并双击顶部微信文本
-        private suspend fun findAndDoubleClickTopWechat(): Boolean {
-            // 1. 查找顶部的"微信"文本
-            val wechatNode = AssistsCore.getAllNodes().find {
-                it.className == "android.widget.TextView"
-                    && it.viewIdResourceName == "android:id/text1"
-                    && it.text?.toString() == "微信"
-            }
-
-            wechatNode?.findFirstParentClickable()?.let { parent ->
-                parent.click()
-                delay(100)
-                parent.click()
-                LogWrapper.logAppend("已双击顶部微信")
-                return true
-            }
-            
-            // 如果没找到，执行返回操作
-            if (AssistsCore.back()) {
-                LogWrapper.logAppend("未找到顶部微信，执行返回操作")
-                delay(1000) // 等待返回动画完成
-                return findAndDoubleClickTopWechat() // 递归调用，直到找到为止
-            }
-            
-            LogWrapper.logAppend("未找到顶部微信且无法返回")
-            return false
-        }
     }
 
     override fun onImpl(collector: StepCollector) {
@@ -323,22 +295,17 @@ class Forward : StepImpl() {
                 if (isLastMsgText == true) {
                     LogWrapper.logAppend("已点击发送按钮，准备查找最新图片消息")
                     Thread.sleep(2000)
-                    
-                    // 循环尝试findAndDoubleClickTopWechat直到成功，最多尝试20次
-                    var attemptCount = 0
-                    while (!findAndDoubleClickTopWechat()) {
-                        attemptCount++
-                        if (attemptCount >= 20) {
-                            LogWrapper.logAppend("已达到最大尝试次数(20次)，退出循环")
-                            return@next Step.none
-                        }
-                        LogWrapper.logAppend("未找到顶部微信，执行返回操作 (尝试次数: $attemptCount/20)")
-                        if (AssistsCore.back()) {
-                            LogWrapper.logAppend("执行返回操作")
-                        }
-                        Thread.sleep(2000)
+                    if (AssistsCore.back()) {
+                        LogWrapper.logAppend("返回一次")
                     }
-                    
+                    Thread.sleep(2000)
+                    if (AssistsCore.back()) {
+                        LogWrapper.logAppend("返回两次")
+                    }
+                    Thread.sleep(2000)
+                    if (AssistsCore.back()) {
+                        LogWrapper.logAppend("返回三次")
+                    }
                     return@next Step.get(StepTag.STEP_2, delay = 3000)
                 } else {
                     LogWrapper.logAppend("已点击发送按钮，准备查找最新文字消息")
@@ -568,7 +535,23 @@ class Forward : StepImpl() {
         //17. 双击顶部微信并进入文件传输助手
         collector.next(StepTag.STEP_17) { step ->
             LogWrapper.logAppend("STEP_17: 开始执行 - 双击顶部微信并进入文件传输助手")
-            if (!findAndDoubleClickTopWechat()) {
+            // 1. 查找顶部的"微信"文本
+            val wechatNode = AssistsCore.getAllNodes().find {
+                it.className == "android.widget.TextView"
+                    && it.viewIdResourceName == "android:id/text1"
+                    && it.text?.toString() == "微信"
+            }
+            
+            if (wechatNode != null) {
+                // 双击"微信"
+                wechatNode.findFirstParentClickable()?.let { parent ->
+                    parent.click()
+                    delay(100)
+                    parent.click()
+                    LogWrapper.logAppend("已双击顶部微信")
+                }
+            } else {
+                LogWrapper.logAppend("未找到顶部微信，重试")
                 return@next Step.get(StepTag.STEP_17, delay = 1000)
             }
 
@@ -683,5 +666,3 @@ class Forward : StepImpl() {
         return content + "\n\n\n防失联，关注服务号：小小阿土哥"
     }
 }
-
-
