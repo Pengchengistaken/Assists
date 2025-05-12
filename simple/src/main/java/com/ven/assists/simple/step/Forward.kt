@@ -28,7 +28,7 @@ class Forward : StepImpl() {
     companion object {
         private var lastImageBounds: String? = null
         private var lastTextMsg: String? = null // 新增：记录上一次的文字消息内容
-        private var DEBUG: Boolean ?= false
+        private var DEBUG: Boolean ?= true
         private var isLastMsgText: Boolean ?= false
         private var retryCount: Int = 0 // 新增：重试计数器
     }
@@ -651,9 +651,9 @@ class Forward : StepImpl() {
         collector.next(StepTag.STEP_19) { step ->
             LogWrapper.logAppend("STEP_19: 开始执行 - 查找最新消息并转发")
             // 3. 双击消息
-            AssistsCore.gestureClick(800f, 2100f)
+            AssistsCore.gestureClick(800f, 2050f)
             delay(100)
-            AssistsCore.gestureClick(800f, 2100f)
+            AssistsCore.gestureClick(800f, 2050f)
             LogWrapper.logAppend("双击右下角，展开消息全屏，开始分享")
             delay(3000)
 
