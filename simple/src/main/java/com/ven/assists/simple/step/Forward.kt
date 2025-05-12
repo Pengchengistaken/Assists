@@ -305,36 +305,23 @@ class Forward : StepImpl() {
                 sendBtn.click()
                 if (isLastMsgText == true) {
                     LogWrapper.logAppend("已点击发送按钮，准备查找最新图片消息")
-                    Thread.sleep(2000)
-                    if (AssistsCore.back()) {
-                        LogWrapper.logAppend("返回一次")
-                    }
-                    Thread.sleep(2000)
-                    if (AssistsCore.back()) {
-                        LogWrapper.logAppend("返回两次")
-                    }
-                    Thread.sleep(2000)
-                    if (AssistsCore.back()) {
-                        LogWrapper.logAppend("返回三次")
-                    }
-                    // 查找顶部的"微信"文本判断是否进入微信主页面
-                    Thread.sleep(4000)
-                    val wechatNode = AssistsCore.getAllNodes().find {
-                        it.className == "android.widget.TextView"
-                                && it.viewIdResourceName == "android:id/text1"
-                                && it.text?.toString() == "微信"
-                    }
-                    if (wechatNode != null) {
-                        LogWrapper.logAppend("到了微信主页面。")
-                        return@next Step.get(StepTag.STEP_2, delay = 3000)
-                    } else {
-                        LogWrapper.logAppend("没有到微信主页面。")
-                        Thread.sleep(2000)
+                    repeat(8) { attempt ->
                         if (AssistsCore.back()) {
-                            LogWrapper.logAppend("返回四次")
+                            LogWrapper.logAppend("返回第 ${attempt + 1} 次")
+                        }
+                        Thread.sleep(2000)
+                        val wechatNode = AssistsCore.getAllNodes().find {
+                            it.className == "android.widget.TextView"
+                                    && it.viewIdResourceName == "android:id/text1"
+                                    && it.text?.toString() == "微信"
+                        }
+                        if (wechatNode != null) {
+                            LogWrapper.logAppend("到了微信主页面。")
+                            return@next Step.get(StepTag.STEP_2, delay = 3000)
                         }
                     }
-                    return@next Step.get(StepTag.STEP_2, delay = 3000)
+                    LogWrapper.logAppend("没有到微信主页面。")
+                    return@next Step.get(StepTag.STEP_1, delay = 3000)
                 } else {
                     LogWrapper.logAppend("已点击发送按钮，准备查找最新文字消息")
                     return@next Step.get(StepTag.STEP_11, delay = 1000)
