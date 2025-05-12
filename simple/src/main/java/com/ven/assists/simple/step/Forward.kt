@@ -318,6 +318,7 @@ class Forward : StepImpl() {
                         LogWrapper.logAppend("返回三次")
                     }
                     // 查找顶部的"微信"文本判断是否进入微信主页面
+                    Thread.sleep(4000)
                     val wechatNode = AssistsCore.getAllNodes().find {
                         it.className == "android.widget.TextView"
                                 && it.viewIdResourceName == "android:id/text1"
@@ -492,6 +493,7 @@ class Forward : StepImpl() {
         //15. 点击发送按钮
         collector.next(StepTag.STEP_15) { step ->
             LogWrapper.logAppend("STEP_15: 开始执行 - 点击发送按钮")
+            delay(2000) //延迟 2 秒让节点加载
             val sendBtn = AssistsCore.getAllNodes().find {
                 (it.className == "android.widget.Button" || it.className == "android.widget.TextView")
                     && it.text?.contains("发送") == true && it.isClickable
