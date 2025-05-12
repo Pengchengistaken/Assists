@@ -28,7 +28,7 @@ class Forward : StepImpl() {
     companion object {
         private var lastImageBounds: String? = null
         private var lastTextMsg: String? = null // 新增：记录上一次的文字消息内容
-        private var DEBUG: Boolean ?= false
+        private var DEBUG: Boolean ?= true
         private var isLastMsgText: Boolean ?= false
         private var retryCount: Int = 0 // 新增：重试计数器
         private var stepRetryCount: Int = 0 // 新增：步骤重试计数器
@@ -58,7 +58,21 @@ class Forward : StepImpl() {
                 stepRetryCount = 0
                 return@next Step.get(StepTag.STEP_100)
             }
-            // 1. 双击底部Tab"微信"
+
+            // 1. 检查是否在微信主页面
+            val wechatNode = AssistsCore.getAllNodes().find {
+                it.className == "android.widget.TextView"
+                    && it.viewIdResourceName == "android:id/text1"
+                    && it.text?.toString() == "微信"
+            }
+            
+            if (wechatNode == null) {
+                LogWrapper.logAppend("不在微信主页面，跳转到恢复步骤")
+                return@next Step.get(StepTag.STEP_100)
+            }
+            LogWrapper.logAppend("确认在微信主页面，继续执行")
+
+            // 2. 双击底部Tab"微信"
             val tabNodes = AssistsCore.findByText("微信")
             val screenHeight = com.blankj.utilcode.util.ScreenUtils.getScreenHeight()
             tabNodes.forEach { node ->
