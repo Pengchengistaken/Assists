@@ -31,8 +31,6 @@ class Forward : StepImpl() {
         private var DEBUG: Boolean ?= true
         private var isLastMsgText: Boolean ?= false
         private var retryCount: Int = 0 // 新增：重试计数器
-        private var stepRetryCount: Int = 0 // 新增：步骤重试计数器
-        private const val MAX_STEP_RETRY = 10 // 新增：最大步骤重试次数
     }
 
     override fun onImpl(collector: StepCollector) {
@@ -52,27 +50,7 @@ class Forward : StepImpl() {
         //2. 点击聊天列表中的京东线报交流群
         collector.next(StepTag.STEP_2) { step ->
             LogWrapper.logAppend("STEP_2: 开始执行 - 查找并点击京东线报交流群")
-            stepRetryCount++
-            if (stepRetryCount > MAX_STEP_RETRY) {
-                LogWrapper.logAppend("STEP_2 重试次数超过限制，跳转到恢复步骤")
-                stepRetryCount = 0
-                return@next Step.get(StepTag.STEP_100)
-            }
-
-            // 1. 检查是否在微信主页面
-            val wechatNode = AssistsCore.getAllNodes().find {
-                it.className == "android.widget.TextView"
-                    && it.viewIdResourceName == "android:id/text1"
-                    && it.text?.toString() == "微信"
-            }
-            
-            if (wechatNode == null) {
-                LogWrapper.logAppend("不在微信主页面，跳转到恢复步骤")
-                return@next Step.get(StepTag.STEP_100)
-            }
-            LogWrapper.logAppend("确认在微信主页面，继续执行")
-
-            // 2. 双击底部Tab"微信"
+            // 1. 双击底部Tab"微信"
             val tabNodes = AssistsCore.findByText("微信")
             val screenHeight = com.blankj.utilcode.util.ScreenUtils.getScreenHeight()
             tabNodes.forEach { node ->
@@ -128,12 +106,6 @@ class Forward : StepImpl() {
         //3. 获取最后一张图片
         collector.next(StepTag.STEP_3) { step ->
             LogWrapper.logAppend("STEP_3: 开始执行 - 获取最后一张图片")
-            stepRetryCount++
-            if (stepRetryCount > MAX_STEP_RETRY) {
-                LogWrapper.logAppend("STEP_3 重试次数超过限制，跳转到恢复步骤")
-                stepRetryCount = 0
-                return@next Step.get(StepTag.STEP_100)
-            }
             //滑动一下聊天窗口
             AssistsWindowManager.nonTouchableByAll()
             delay(250)
@@ -185,12 +157,6 @@ class Forward : StepImpl() {
         //4. 查找并点击"转发"按钮
         collector.next(StepTag.STEP_4) { step ->
             LogWrapper.logAppend("STEP_4: 开始执行 - 查找并点击转发按钮")
-            stepRetryCount++
-            if (stepRetryCount > MAX_STEP_RETRY) {
-                LogWrapper.logAppend("STEP_4 重试次数超过限制，跳转到恢复步骤")
-                stepRetryCount = 0
-                return@next Step.get(StepTag.STEP_100)
-            }
             // 1. 查找所有 text=转发 且 resource-id=obc 的 TextView
             val forwardTextNodes = AssistsCore.getAllNodes().filter {
                 it.className == "android.widget.TextView"
@@ -211,7 +177,7 @@ class Forward : StepImpl() {
             Thread.sleep(1500)
             lastImageBounds = null
             AssistsCore.back()
-            return@next Step.get(StepTag.STEP_2, delay = 2000)
+            return@next Step.get(StepTag.STEP_100, delay = 2000)
         }
 
         // STEP_5，真正执行点击
@@ -232,6 +198,12 @@ class Forward : StepImpl() {
                     LogWrapper.logAppend("设置 isLastMsgText 为 false")
                     return@next Step.get(StepTag.STEP_6)
                 }
+            } else {
+                LogWrapper.logAppend("未找到转发按钮，重试")
+                Thread.sleep(1500)
+                lastImageBounds = null
+                AssistsCore.back()
+                return@next Step.get(StepTag.STEP_100, delay = 2000)
             }
             LogWrapper.logAppend("已点击转发按钮，下一步")
             return@next Step.get(StepTag.STEP_6, delay = 3000)
@@ -240,12 +212,6 @@ class Forward : StepImpl() {
          //6. 选择转发对象
          collector.next(StepTag.STEP_6) { step ->
              LogWrapper.logAppend("STEP_6: 开始执行 - 选择转发对象")
-             stepRetryCount++
-             if (stepRetryCount > MAX_STEP_RETRY) {
-                 LogWrapper.logAppend("STEP_6 重试次数超过限制，跳转到恢复步骤")
-                 stepRetryCount = 0
-                 return@next Step.get(StepTag.STEP_100)
-             }
              LogWrapper.logAppend("选择转发对象")
              // 1. 查找并点击"多选"按钮
              val multiSelectNode = AssistsCore.getAllNodes().find {
@@ -361,7 +327,7 @@ class Forward : StepImpl() {
                         }
                     }
                     LogWrapper.logAppend("没有到微信主页面。")
-                    return@next Step.get(StepTag.STEP_1, delay = 3000)
+                    return@next Step.get(StepTag.STEP_100, delay = 3000)
                 } else {
                     LogWrapper.logAppend("已点击发送按钮，准备查找最新文字消息")
                     return@next Step.get(StepTag.STEP_11, delay = 2000)
@@ -436,12 +402,6 @@ class Forward : StepImpl() {
         //12. 进入京粉并自动发消息
         collector.next(StepTag.STEP_12) { step ->
             LogWrapper.logAppend("STEP_12: 开始执行 - 查找并进入京粉")
-            stepRetryCount++
-            if (stepRetryCount > MAX_STEP_RETRY) {
-                LogWrapper.logAppend("STEP_12 重试次数超过限制，跳转到恢复步骤")
-                stepRetryCount = 0
-                return@next Step.get(StepTag.STEP_100)
-            }
             // 1. 查找所有聊天行（每一行的 LinearLayout，id=cj0）
             val allRows = AssistsCore.getAllNodes().filter {
                 it.className == "android.widget.LinearLayout" && it.viewIdResourceName == "com.tencent.mm:id/cj0"
@@ -496,12 +456,6 @@ class Forward : StepImpl() {
         //14. 点击输入框并粘贴内容
         collector.next(StepTag.STEP_14) { step ->
             LogWrapper.logAppend("STEP_14: 开始执行 - 点击输入框并粘贴内容")
-            stepRetryCount++
-            if (stepRetryCount > MAX_STEP_RETRY) {
-                LogWrapper.logAppend("STEP_14 重试次数超过限制，跳转到恢复步骤")
-                stepRetryCount = 0
-                return@next Step.get(StepTag.STEP_100)
-            }
             val editTextNode = AssistsCore.getAllNodes().find {
                 it.className == "android.widget.EditText"
                     && it.viewIdResourceName == "com.tencent.mm:id/bkk"
@@ -603,12 +557,6 @@ class Forward : StepImpl() {
         //17. 双击顶部微信并进入文件传输助手
         collector.next(StepTag.STEP_17) { step ->
             LogWrapper.logAppend("STEP_17: 开始执行 - 双击顶部微信并进入文件传输助手")
-            stepRetryCount++
-            if (stepRetryCount > MAX_STEP_RETRY) {
-                LogWrapper.logAppend("STEP_17 重试次数超过限制，跳转到恢复步骤")
-                stepRetryCount = 0
-                return@next Step.get(StepTag.STEP_100)
-            }
             // 1. 查找顶部的"微信"文本
             val wechatNode = AssistsCore.getAllNodes().find {
                 it.className == "android.widget.TextView"
@@ -726,7 +674,7 @@ class Forward : StepImpl() {
         collector.next(StepTag.STEP_100) { step ->
             LogWrapper.logAppend("STEP_100: 开始执行 - 恢复到微信主页面")
             
-            // 1. 检查是否已经在微信主页面
+            // 1. 查找顶部的"微信"文本
             val wechatNode = AssistsCore.getAllNodes().find {
                 it.className == "android.widget.TextView"
                     && it.viewIdResourceName == "android:id/text1"
@@ -734,54 +682,35 @@ class Forward : StepImpl() {
             }
             
             if (wechatNode != null) {
-                LogWrapper.logAppend("已在微信主页面，重置状态并返回 STEP_2")
-                lastImageBounds = null
-                lastTextMsg = null
-                isLastMsgText = false
-                retryCount = 0
-                return@next Step.get(StepTag.STEP_2, delay = 3000)
-            }
-
-            // 2. 尝试返回操作
-            repeat(10) { attempt ->
-                if (AssistsCore.back()) {
-                    LogWrapper.logAppend("返回第 ${attempt + 1} 次")
-                    delay(1000)
-                    
-                    // 检查是否已回到微信主页面
-                    val checkWechatNode = AssistsCore.getAllNodes().find {
-                        it.className == "android.widget.TextView"
-                            && it.viewIdResourceName == "android:id/text1"
-                            && it.text?.toString() == "微信"
-                    }
-                    
-                    if (checkWechatNode != null) {
-                        LogWrapper.logAppend("已回到微信主页面，重置状态并返回 STEP_2")
-                        lastImageBounds = null
-                        lastTextMsg = null
-                        isLastMsgText = false
-                        retryCount = 0
-                        return@next Step.get(StepTag.STEP_2, delay = 3000)
-                    }
+                // 双击"微信"
+                wechatNode.findFirstParentClickable()?.let { parent ->
+                    parent.click()
+                    delay(100)
+                    parent.click()
+                    LogWrapper.logAppend("已双击顶部微信，成功返回主页面")
+                    return@next Step.get(StepTag.STEP_2, delay = 2000)
                 }
             }
 
-            // 3. 如果多次返回后仍未回到主页面，重新启动微信
-            LogWrapper.logAppend("多次返回后仍未回到主页面，重新启动微信")
-            Intent().apply {
-                addCategory(Intent.CATEGORY_LAUNCHER)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                component = ComponentName("com.tencent.mm", "com.tencent.mm.ui.LauncherUI")
-                AssistsService.instance?.startActivity(this)
+            // 2. 如果没找到顶部微信，尝试多次返回
+            repeat(10) { attempt ->
+                if (AssistsCore.back()) {
+                    LogWrapper.logAppend("返回第 ${attempt + 1} 次")
+                }
+                Thread.sleep(2000)
+                val wechatNode = AssistsCore.getAllNodes().find {
+                    it.className == "android.widget.TextView"
+                            && it.viewIdResourceName == "android:id/text1"
+                            && it.text?.toString() == "微信"
+                }
+                if (wechatNode != null) {
+                    LogWrapper.logAppend("到了微信主页面")
+                    return@next Step.get(StepTag.STEP_2, delay = 2000)
+                }
             }
             
-            // 重置所有状态
-            lastImageBounds = null
-            lastTextMsg = null
-            isLastMsgText = false
-            retryCount = 0
-            
-            return@next Step.get(StepTag.STEP_2, delay = 5000)
+            LogWrapper.logAppend("未能返回微信主页面，重新启动微信")
+            return@next Step.get(StepTag.STEP_1, delay = 2000)
         }
     }
 
