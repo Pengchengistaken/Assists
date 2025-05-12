@@ -28,7 +28,7 @@ class Forward : StepImpl() {
     companion object {
         private var lastImageBounds: String? = null
         private var lastTextMsg: String? = null // 新增：记录上一次的文字消息内容
-        private var DEBUG: Boolean ?= true
+        private var DEBUG: Boolean ?= false
         private var isLastMsgText: Boolean ?= false
     }
 
@@ -81,8 +81,9 @@ class Forward : StepImpl() {
                     LogWrapper.logAppend("已找到并点击京东线报交流群")
                     return@next Step.get(StepTag.STEP_3)
                 } else if (hasAh && kbqNode != null) {
+                   LogWrapper.logAppend("京东线报交流群有新消息，2分钟后点击并进入执行。")
+                   delay(120_000)
                    kbqNode.findFirstParentClickable()?.click()
-                   LogWrapper.logAppend("已找到并点击京东线报交流群")
                    return@next Step.get(StepTag.STEP_3)
                }
             }
@@ -657,8 +658,9 @@ class Forward : StepImpl() {
                     LogWrapper.logAppend("设置 isLastMsgText 为 true")
                     return@next Step.get(StepTag.STEP_6, delay = 1000)
                 }else{
-                    LogWrapper.logAppend("未找到分享按钮，停止")
-                    return@next Step.none
+                    LogWrapper.logAppend("未找到分享按钮，重试")
+                    AssistsCore.back()
+                    return@next Step.get(StepTag.STEP_19, delay = 1000)
                 }
             } else {
                 LogWrapper.logAppend("未找到最新消息，重试")
