@@ -30,6 +30,7 @@ class Forward : StepImpl() {
         private var lastTextMsg: String? = null // 新增：记录上一次的文字消息内容
         private var DEBUG: Boolean ?= false
         private var isLastMsgText: Boolean ?= false
+        private var retryCount: Int = 0 // 新增：重试计数器
     }
 
     override fun onImpl(collector: StepCollector) {
@@ -79,17 +80,27 @@ class Forward : StepImpl() {
                if (DEBUG == true && kbqNode != null) { //调试：不需要小红点
                     kbqNode.findFirstParentClickable()?.click()
                     LogWrapper.logAppend("已找到并点击京东线报交流群")
+                    retryCount = 0 // 重置计数器
                     return@next Step.get(StepTag.STEP_3)
                 } else if (hasAh && kbqNode != null) {
                    LogWrapper.logAppend("京东线报交流群有新消息，2分钟后点击并进入执行。")
                    delay(120_000)
                    kbqNode.findFirstParentClickable()?.click()
+                   retryCount = 0 // 重置计数器
                    return@next Step.get(StepTag.STEP_3)
                }
             }
 
-            LogWrapper.logAppend("未找到京东线报交流群或者群里没有新消息，30秒后重试")
-            return@next Step.get(StepTag.STEP_2, delay = 30_000)
+            retryCount++
+            LogWrapper.logAppend("未找到京东线报交流群或者群里没有新消息，当前重试次数: $retryCount/60")
+            
+            if (retryCount >= 60) {
+                LogWrapper.logAppend("已达到最大重试次数(60次)，返回STEP_1")
+                retryCount = 0 // 重置计数器
+                return@next Step.get(StepTag.STEP_1, delay = 3000)
+            }
+            LogWrapper.logAppend("1分钟后再次检查。")
+            return@next Step.get(StepTag.STEP_2, delay = 60_000)
         }
 
         //3. 获取最后一张图片
@@ -305,6 +316,22 @@ class Forward : StepImpl() {
                     Thread.sleep(2000)
                     if (AssistsCore.back()) {
                         LogWrapper.logAppend("返回三次")
+                    }
+                    // 查找顶部的"微信"文本判断是否进入微信主页面
+                    val wechatNode = AssistsCore.getAllNodes().find {
+                        it.className == "android.widget.TextView"
+                                && it.viewIdResourceName == "android:id/text1"
+                                && it.text?.toString() == "微信"
+                    }
+                    if (wechatNode != null) {
+                        LogWrapper.logAppend("到了微信主页面。")
+                        return@next Step.get(StepTag.STEP_2, delay = 3000)
+                    } else {
+                        LogWrapper.logAppend("没有到微信主页面。")
+                        Thread.sleep(2000)
+                        if (AssistsCore.back()) {
+                            LogWrapper.logAppend("返回四次")
+                        }
                     }
                     return@next Step.get(StepTag.STEP_2, delay = 3000)
                 } else {
