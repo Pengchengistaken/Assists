@@ -26,9 +26,8 @@ class Forward : StepImpl() {
     companion object {
         private var lastImageBounds: String? = null
         private var lastTextMsg: String? = null // 新增：记录上一次的文字消息内容
-        private var DEBUG: Boolean ?= true
+        private var DEBUG: Boolean ?= false
         private var isLastMsgText: Boolean ?= false
-        private var retryCount: Int = 0 // 新增：重试计数器
     }
 
     override fun onImpl(collector: StepCollector) {
@@ -78,27 +77,16 @@ class Forward : StepImpl() {
                if (DEBUG == true && kbqNode != null) { //调试：不需要小红点
                     kbqNode.findFirstParentClickable()?.click()
                     LogWrapper.logAppend("已找到并点击京东线报交流群")
-                    retryCount = 0 // 重置计数器
                     return@next Step.get(StepTag.STEP_3)
                 } else if (hasAh && kbqNode != null) {
                    LogWrapper.logAppend("京东线报交流群有新消息，2分钟后点击并进入执行。")
                    delay(120_000)
                    kbqNode.findFirstParentClickable()?.click()
-                   retryCount = 0 // 重置计数器
                    return@next Step.get(StepTag.STEP_3)
                }
             }
-
-            retryCount++
-            LogWrapper.logAppend("未找到京东线报交流群或者群里没有新消息，当前重试次数: $retryCount/60")
-            
-            if (retryCount >= 60) {
-                LogWrapper.logAppend("已达到最大重试次数(60次)，重置，去 STEP_100")
-                retryCount = 0 // 重置计数器
-                return@next Step.get(StepTag.STEP_100, delay = 3000)
-            }
-            LogWrapper.logAppend("1分钟后再次检查。")
-            return@next Step.get(StepTag.STEP_2, delay = 60_000)
+            LogWrapper.logAppend("未找到京东线报交流群或者群里没有新消息")
+            return@next Step.get(StepTag.STEP_100, delay = 1000)
         }
 
         //3. 获取最后一张图片
@@ -123,8 +111,8 @@ class Forward : StepImpl() {
                 it.viewIdResourceName == "com.tencent.mm:id/bkg" && it.isClickable && it.isLongClickable
             }
             if (allImageNodes.isEmpty()) {
-                LogWrapper.logAppend("未找到图片消息，3秒后重试")
-                return@next Step.get(StepTag.STEP_3, delay = 3000) // todo 这里会一直重试，直到找到图片消息
+                LogWrapper.logAppend("未找到图片消息，回到微信首页。")
+                return@next Step.get(StepTag.STEP_100, delay = 1000)
             }
             // 2. 取最后一个图片节点
             val lastImageNode = allImageNodes.last()
@@ -175,7 +163,7 @@ class Forward : StepImpl() {
                 // 2. 找到可点击的父 LinearLayout
                 val clickableParent = forwardTextNode.findFirstParentClickable()
                 if (clickableParent != null) {
-                    LogWrapper.logAppend("已定位到转发按钮，2秒后点击")
+                    LogWrapper.logAppend("已定位到转发按钮，2秒后点击。")
                     // 延时2秒后点击
                     return@next Step.get(StepTag.STEP_5, delay = 2000)
                 }
@@ -199,6 +187,8 @@ class Forward : StepImpl() {
                 val forwardTextNode = forwardTextNodes.first()
                 val clickableParent = forwardTextNode.findFirstParentClickable()
                 if (clickableParent != null) {
+                    LogWrapper.logAppend("延迟 1 秒。")
+                    delay(1000)
                     clickableParent.click()
                     LogWrapper.logAppend("已点击转发按钮")
                     isLastMsgText = false
@@ -227,9 +217,11 @@ class Forward : StepImpl() {
                      && it.isClickable
              }
              if (multiSelectNode != null) {
-                 multiSelectNode.click()
-                 LogWrapper.logAppend("已点击多选按钮")
-                 return@next Step.get(StepTag.STEP_7, delay = 2000)
+                LogWrapper.logAppend("已定位到多选按钮，2秒后点击。")
+                delay(2000)
+                multiSelectNode.click()
+                LogWrapper.logAppend("已点击多选按钮")
+                return@next Step.get(StepTag.STEP_7, delay = 2000)
              } else {
                  LogWrapper.logAppend("未找到多选按钮，重试")
                  return@next Step.get(StepTag.STEP_6, delay = 2000)
@@ -244,6 +236,8 @@ class Forward : StepImpl() {
                             && it.text?.toString()?.contains("文件传输助手") == true
                 }
                 if (group8Node != null) {
+                    LogWrapper.logAppend("已定位到文件传输助手，2秒后点击。")
+                    delay(2000)
                     group8Node.findFirstParentClickable()?.click()
                     LogWrapper.logAppend("已点击文件传输助手")
                     return@next Step.get(StepTag.STEP_9, delay = 2000)
@@ -261,6 +255,8 @@ class Forward : StepImpl() {
                             && it.text?.toString()?.contains("京东优质线报8群") == true
                 }
                 if (group8Node != null) {
+                    LogWrapper.logAppend("已定位到京东优质线报8群，2秒后点击。")
+                    delay(2000)
                     group8Node.findFirstParentClickable()?.click()
                     LogWrapper.logAppend("已点击京东优质线报8群")
                     return@next Step.get(StepTag.STEP_8, delay = 2000)
@@ -278,6 +274,8 @@ class Forward : StepImpl() {
                             && it.text?.toString()?.contains("京东优质线报9群") == true
                 }
                 if (group9Node != null) {
+                    LogWrapper.logAppend("已定位到京东优质线报9群，2秒后点击。")
+                    delay(2000)
                     group9Node.findFirstParentClickable()?.click()
                     LogWrapper.logAppend("已点击京东优质线报9群")
                     return@next Step.get(StepTag.STEP_9, delay = 2000)
@@ -297,6 +295,8 @@ class Forward : StepImpl() {
                     && it.isClickable
             }
             if (finishBtn != null) {
+                LogWrapper.logAppend("已定位到完成按钮，2秒后点击。")
+                delay(2000)
                 finishBtn.click()
                 LogWrapper.logAppend("已点击完成按钮")
                 return@next Step.get(StepTag.STEP_10, delay = 2000)
@@ -315,6 +315,8 @@ class Forward : StepImpl() {
                     && it.isClickable
             }
             if (sendBtn != null) {
+                LogWrapper.logAppend("已定位到发送按钮，2秒后点击。")
+                delay(2000)
                 sendBtn.click()
                 if (isLastMsgText == true) {
                     LogWrapper.logAppend("已点击发送按钮，准备查找最新图片消息")
@@ -322,7 +324,7 @@ class Forward : StepImpl() {
                         if (AssistsCore.back()) {
                             LogWrapper.logAppend("返回第 ${attempt + 1} 次")
                         }
-                        Thread.sleep(2000)
+                        delay(2000)
                         val wechatNode = AssistsCore.getAllNodes().find {
                             it.className == "android.widget.TextView"
                                     && it.viewIdResourceName == "android:id/text1"
@@ -388,8 +390,8 @@ class Forward : StepImpl() {
 
             // 判断是否需要back
             if (latestMsg == null || latestMsg == lastTextMsg || (latestMsgIndex < latestImageIndex && latestImageIndex != -1)) {
-                AssistsCore.back()
-                return@next Step.get(StepTag.STEP_2, delay = 2000)
+                LogWrapper.logAppend("无有效文字消息，回到微信首页")
+                return@next Step.get(StepTag.STEP_100, delay = 2000)
             }
 
             // 内容有变化，复制内容并处理
@@ -400,7 +402,7 @@ class Forward : StepImpl() {
                 val clip = android.content.ClipData.newPlainText("msg", processedMsg)
                 clipboard?.setPrimaryClip(clip)
                 LogWrapper.logAppend("已复制最新消息到剪贴板: $processedMsg")
-                LogWrapper.logAppend("阿汤哥最新消息内容: $processedMsg")
+//                LogWrapper.logAppend("阿汤哥最新消息内容: $processedMsg")
                 AssistsCore.back()
             }
             return@next Step.get(StepTag.STEP_12, delay = 2000)
@@ -421,6 +423,8 @@ class Forward : StepImpl() {
                     it.viewIdResourceName == "com.tencent.mm:id/kbq" && (it.text?.contains("京粉") == true)
                 }
                 if (kbqNode != null) {
+                    LogWrapper.logAppend("已找到并定位到京粉，2秒后点击。")
+                    delay(2000)
                     kbqNode.findFirstParentClickable()?.click()
                     LogWrapper.logAppend("已找到并点击京粉")
                     return@next Step.get(StepTag.STEP_13)
@@ -451,6 +455,8 @@ class Forward : StepImpl() {
                     && it.contentDescription?.contains("切换到发消息") == true
             }
             if (switchMsgNode != null) {
+                LogWrapper.logAppend("已定位到切换到发消息按钮，2秒后点击。")
+                delay(2000)
                 switchMsgNode.click()
                 LogWrapper.logAppend("已点击切换到发消息")
                 return@next Step.get(StepTag.STEP_14, delay = 2000)
@@ -469,10 +475,12 @@ class Forward : StepImpl() {
                     && it.isClickable && it.isEnabled && it.isFocusable
             }
             if (editTextNode != null) {
+                LogWrapper.logAppend("已定位到输入框，2秒后长按。")
+                delay(2000)
                 // 长按输入框
                 val longClickResult = editTextNode.longClick()
                 LogWrapper.logAppend("长按输入框结果: $longClickResult")
-                delay(500) // 等待菜单出现
+                delay(2000) // 等待菜单出现
 
                 // 点击固定坐标的"粘贴"按钮
                 val clickResult = AssistsCore.gestureClick(120f, 2180f)
@@ -493,12 +501,15 @@ class Forward : StepImpl() {
         //15. 点击发送按钮
         collector.next(StepTag.STEP_15) { step ->
             LogWrapper.logAppend("STEP_15: 开始执行 - 点击发送按钮")
+            LogWrapper.logAppend("延迟 2 秒让节点加载")
             delay(2000) //延迟 2 秒让节点加载
             val sendBtn = AssistsCore.getAllNodes().find {
                 (it.className == "android.widget.Button" || it.className == "android.widget.TextView")
                     && it.text?.contains("发送") == true && it.isClickable
             }
             if (sendBtn != null) {
+                LogWrapper.logAppend("已定位到发送按钮，2秒后点击。")
+                delay(2000)
                 sendBtn.click()
                 LogWrapper.logAppend("已点击发送按钮，进入下一步")
                 return@next Step.get(StepTag.STEP_16, delay = 5000)
@@ -592,6 +603,8 @@ class Forward : StepImpl() {
             }
 
             if (fileTransferNode != null) {
+                LogWrapper.logAppend("已定位到文件传输助手，2秒后点击。")
+                delay(2000)
                 fileTransferNode.findFirstParentClickable()?.click()
                 LogWrapper.logAppend("已点击文件传输助手")
                 return@next Step.get(StepTag.STEP_18, delay = 2000)
@@ -615,7 +628,7 @@ class Forward : StepImpl() {
                 // 2. 长按输入框
                 val longClickResult = editTextNode.longClick()
                 LogWrapper.logAppend("长按输入框结果: $longClickResult")
-                delay(500) // 等待菜单出现
+                delay(1000) // 等待菜单出现
 
                 // 3. 点击固定坐标的"粘贴"按钮
                 val clickResult = AssistsCore.gestureClick(120f, 2180f)
@@ -630,6 +643,8 @@ class Forward : StepImpl() {
                             && it.text?.contains("发送") == true && it.isClickable
                     }
                     if (sendBtn != null) {
+                        LogWrapper.logAppend("已定位到发送按钮，2秒后点击。")
+                        delay(2000)
                         sendBtn.click()
                         LogWrapper.logAppend("已点击发送按钮，完成所有步骤")
                         return@next Step.get(StepTag.STEP_19, delay = 2000)
@@ -656,6 +671,7 @@ class Forward : StepImpl() {
             delay(100)
             AssistsCore.gestureClick(800f, 2050f)
             LogWrapper.logAppend("双击右下角，展开消息全屏，开始分享")
+            LogWrapper.logAppend("延迟 3 秒")
             delay(3000)
 
             // 4. 查找并点击"分享"按钮
