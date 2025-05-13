@@ -9,9 +9,7 @@ import com.ven.assists.AssistsCore.findFirstParentClickable
 import com.ven.assists.AssistsCore.getBoundsInScreen
 import com.ven.assists.AssistsCore.getNodes
 import com.ven.assists.AssistsCore.longClick
-import com.ven.assists.AssistsCore.nodeGestureClickByDouble
 import com.ven.assists.AssistsCore.scrollForward
-import com.ven.assists.AssistsCore.setNodeText
 import com.ven.assists.service.AssistsService
 import com.ven.assists.simple.common.LogWrapper
 import com.ven.assists.stepper.Step
@@ -28,7 +26,7 @@ class Forward : StepImpl() {
     companion object {
         private var lastImageBounds: String? = null
         private var lastTextMsg: String? = null // 新增：记录上一次的文字消息内容
-        private var DEBUG: Boolean ?= true
+        private var DEBUG: Boolean ?= false
         private var isLastMsgText: Boolean ?= false
         private var retryCount: Int = 0 // 新增：重试计数器
     }
@@ -642,8 +640,9 @@ class Forward : StepImpl() {
 
         //19. 查找最新消息并转发
         collector.next(StepTag.STEP_19) { step ->
-            LogWrapper.logAppend("STEP_19: 开始执行 - 查找最新消息并转发")
+            LogWrapper.logAppend("STEP_19: 开始执行 - 展开消息全屏并转发")
             // 3. 双击消息
+            delay(3000)
             AssistsCore.gestureClick(800f, 2050f)
             delay(100)
             AssistsCore.gestureClick(800f, 2050f)
