@@ -26,7 +26,7 @@ class Forward : StepImpl() {
     companion object {
         private var lastImageBounds: String? = null
         private var lastTextMsg: String? = null // 新增：记录上一次的文字消息内容
-        private var DEBUG: Boolean ?= false
+        private var DEBUG: Boolean ?= true
         private var isLastMsgText: Boolean ?= false
         private var retryCount: Int = 0 // 新增：重试计数器
     }
@@ -93,9 +93,9 @@ class Forward : StepImpl() {
             LogWrapper.logAppend("未找到京东线报交流群或者群里没有新消息，当前重试次数: $retryCount/60")
             
             if (retryCount >= 60) {
-                LogWrapper.logAppend("已达到最大重试次数(60次)，返回STEP_1")
+                LogWrapper.logAppend("已达到最大重试次数(60次)，重置，去 STEP_100")
                 retryCount = 0 // 重置计数器
-                return@next Step.get(StepTag.STEP_1, delay = 3000)
+                return@next Step.get(StepTag.STEP_100, delay = 3000)
             }
             LogWrapper.logAppend("1分钟后再次检查。")
             return@next Step.get(StepTag.STEP_2, delay = 60_000)
@@ -124,8 +124,7 @@ class Forward : StepImpl() {
             }
             if (allImageNodes.isEmpty()) {
                 LogWrapper.logAppend("未找到图片消息，3秒后重试")
-                AssistsCore.back()
-                return@next Step.get(StepTag.STEP_2, delay = 3000)
+                return@next Step.get(StepTag.STEP_3, delay = 3000) // todo 这里会一直重试，直到找到图片消息
             }
             // 2. 取最后一个图片节点
             val lastImageNode = allImageNodes.last()
@@ -143,8 +142,18 @@ class Forward : StepImpl() {
             // 4. 长按图片
             if (lastImageNode.isVisibleToUser && lastImageNode.isLongClickable && lastImageNode.isEnabled) {
                 LogWrapper.logAppend("节点可交互，准备长按: bounds=${lastImageNode.getBoundsInScreen()}")
-                lastImageNode.longClick()
-                return@next Step.get(StepTag.STEP_4, delay = 2000)
+                if (lastImageNode.click()) {
+                    LogWrapper.logAppend("点击一下，打开图片。")
+                    LogWrapper.logAppend("延迟 2 秒")
+                    delay(2000)
+                    AssistsCore.back()
+                }
+                LogWrapper.logAppend("延迟 2 秒")
+                delay(2000)
+                if (lastImageNode.longClick()) {
+                    return@next Step.get(StepTag.STEP_4, delay = 3000)
+                }
+                return@next Step.get(StepTag.STEP_3, delay = 3000)
             } else {
                 LogWrapper.logAppend("节点不可交互，isVisibleToUser=${lastImageNode.isVisibleToUser}, isLongClickable=${lastImageNode.isLongClickable}, isEnabled=${lastImageNode.isEnabled}")
                 // 延迟重试
