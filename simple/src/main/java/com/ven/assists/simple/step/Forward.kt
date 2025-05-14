@@ -47,7 +47,20 @@ class Forward : StepImpl() {
         //2. 点击聊天列表中的京东线报交流群
         collector.next(StepTag.STEP_2) { step ->
             LogWrapper.logAppend("STEP_2: 开始执行 - 查找并点击京东线报交流群")
-            // 1. 双击底部Tab"微信"
+            
+            // 1. 先判断是否在微信主页面
+            val wechatNode = AssistsCore.getAllNodes().find {
+                it.className == "android.widget.TextView"
+                    && it.viewIdResourceName == "android:id/text1"
+                    && it.text?.toString() == "微信"
+            }
+            
+            if (wechatNode == null) {
+                LogWrapper.logAppend("不在微信主页面，执行 STEP_100")
+                return@next Step.get(StepTag.STEP_100, delay = 1000)
+            }
+            
+            // 2. 双击底部Tab"微信"
             val tabNodes = AssistsCore.findByText("微信")
             val screenHeight = com.blankj.utilcode.util.ScreenUtils.getScreenHeight()
             tabNodes.forEach { node ->
@@ -85,8 +98,8 @@ class Forward : StepImpl() {
                    return@next Step.get(StepTag.STEP_3)
                }
             }
-            LogWrapper.logAppend("未找到京东线报交流群或者群里没有新消息")
-            return@next Step.get(StepTag.STEP_100, delay = 1000)
+            LogWrapper.logAppend("群里没有新消息, 20秒后再检查。")
+            return@next Step.get(StepTag.STEP_2, delay = 20_000)
         }
 
         //3. 获取最后一张图片
@@ -134,7 +147,10 @@ class Forward : StepImpl() {
                     LogWrapper.logAppend("点击一下，打开图片。")
                     LogWrapper.logAppend("延迟 2 秒")
                     delay(2000)
-                    AssistsCore.back()
+                    LogWrapper.logAppend("点击底部的转发按钮。")
+                    if (AssistsCore.gestureClick(646f,2261f)) {
+                        return@next Step.get(StepTag.STEP_6, delay = 3000)
+                    }
                 }
                 LogWrapper.logAppend("延迟 2 秒")
                 delay(2000)
@@ -339,6 +355,8 @@ class Forward : StepImpl() {
                     return@next Step.get(StepTag.STEP_100, delay = 3000)
                 } else {
                     LogWrapper.logAppend("已点击发送按钮，准备查找最新文字消息")
+                    delay(5000)
+                    AssistsCore.back()
                     return@next Step.get(StepTag.STEP_11, delay = 2000)
                 }
             } else {
@@ -403,6 +421,7 @@ class Forward : StepImpl() {
                 clipboard?.setPrimaryClip(clip)
                 LogWrapper.logAppend("已复制最新消息到剪贴板: $processedMsg")
 //                LogWrapper.logAppend("阿汤哥最新消息内容: $processedMsg")
+                delay(2000)
                 AssistsCore.back()
             }
             return@next Step.get(StepTag.STEP_12, delay = 2000)
