@@ -47,20 +47,7 @@ class Forward : StepImpl() {
         //2. 点击聊天列表中的京东线报交流群
         collector.next(StepTag.STEP_2) { step ->
             LogWrapper.logAppend("STEP_2: 开始执行 - 查找并点击京东线报交流群")
-            
-            // 1. 先判断是否在微信主页面
-            val wechatNode = AssistsCore.getAllNodes().find {
-                it.className == "android.widget.TextView"
-                    && it.viewIdResourceName == "android:id/text1"
-                    && it.text?.toString() == "微信"
-            }
-            
-            if (wechatNode == null) {
-                LogWrapper.logAppend("不在微信主页面，执行 STEP_100")
-                return@next Step.get(StepTag.STEP_100, delay = 1000)
-            }
-            
-            // 2. 双击底部Tab"微信"
+            // 双击底部Tab"微信"
             val tabNodes = AssistsCore.findByText("微信")
             val screenHeight = com.blankj.utilcode.util.ScreenUtils.getScreenHeight()
             tabNodes.forEach { node ->
@@ -75,12 +62,12 @@ class Forward : StepImpl() {
                     }
                 }
             }
-            // 2. 查找所有聊天行（每一行的 LinearLayout，id=cj0）
+            // 查找所有聊天行（每一行的 LinearLayout，id=cj0）
             val allRows = AssistsCore.getAllNodes().filter {
                 it.className == "android.widget.LinearLayout" && it.viewIdResourceName == "com.tencent.mm:id/cj0"
             }
 
-            // 3. 遍历每一行，递归查找 a_h（小红点） 和 kbq（群名）
+            // 遍历每一行，递归查找 a_h（小红点） 和 kbq（群名）
             for (row in allRows) {
                 val allDescendants = row.getNodes() // 递归获取所有后代节点
                 val hasAh = allDescendants.any { it.viewIdResourceName == "com.tencent.mm:id/a_h" }
@@ -98,8 +85,8 @@ class Forward : StepImpl() {
                    return@next Step.get(StepTag.STEP_3)
                }
             }
-            LogWrapper.logAppend("群里没有新消息, 20秒后再检查。")
-            return@next Step.get(StepTag.STEP_2, delay = 20_000)
+            LogWrapper.logAppend("群里没有新消息, 一分钟后再检查。")
+            return@next Step.get(StepTag.STEP_2, delay = 60_000)
         }
 
         //3. 获取最后一张图片
@@ -723,16 +710,13 @@ class Forward : StepImpl() {
                     && it.viewIdResourceName == "android:id/text1"
                     && it.text?.toString() == "微信"
             }
-            
-            if (wechatNode != null) {
-                // 双击"微信"
-                wechatNode.findFirstParentClickable()?.let { parent ->
-                    parent.click()
-                    delay(100)
-                    parent.click()
-                    LogWrapper.logAppend("已双击顶部微信，成功返回主页面")
-                    return@next Step.get(StepTag.STEP_2, delay = 2000)
-                }
+
+            wechatNode?.findFirstParentClickable()?.let { parent ->
+                parent.click()
+                delay(100)
+                parent.click()
+                LogWrapper.logAppend("已双击顶部微信，成功返回主页面")
+                return@next Step.get(StepTag.STEP_2, delay = 2000)
             }
 
             // 2. 如果没找到顶部微信，尝试多次返回
