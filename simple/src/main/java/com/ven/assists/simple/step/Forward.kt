@@ -28,11 +28,18 @@ class Forward : StepImpl() {
         private var lastTextMsg: String? = null // 新增：记录上一次的文字消息内容
         private var DEBUG: Boolean ?= false
         private var isLastMsgText: Boolean ?= false
+        private var lastStep: Int? = 0 // 新增：记录最后执行的步骤
+
+        private fun setLastStep(step: Int) {
+            lastStep = step
+            LogWrapper.logAppend("当前执行步骤: $step")
+        }
     }
 
     override fun onImpl(collector: StepCollector) {
         //1. 打开微信
         collector.next(StepTag.STEP_1, isRunCoroutineIO = true) {
+            setLastStep(StepTag.STEP_1)
             LogWrapper.logAppend("STEP_1: 开始执行 - 启动微信")
             LogWrapper.logAppend("启动微信")
             Intent().apply {
@@ -46,6 +53,7 @@ class Forward : StepImpl() {
 
         //2. 点击聊天列表中的京东线报交流群
         collector.next(StepTag.STEP_2) { step ->
+            setLastStep(StepTag.STEP_2)
             LogWrapper.logAppend("STEP_2: 开始执行 - 查找并点击京东线报交流群")
             // 双击底部Tab"微信"
             val tabNodes = AssistsCore.findByText("微信")
@@ -91,6 +99,9 @@ class Forward : StepImpl() {
 
         //3. 获取最后一张图片
         collector.next(StepTag.STEP_3) { step ->
+            isLastMsgText = false
+            LogWrapper.logAppend("设置 isLastMsgText 为 false")
+            setLastStep(StepTag.STEP_3)
             LogWrapper.logAppend("STEP_3: 开始执行 - 获取最后一张图片")
             //滑动一下聊天窗口
             AssistsWindowManager.nonTouchableByAll()
@@ -129,11 +140,11 @@ class Forward : StepImpl() {
 
             // 4. 长按图片
             if (lastImageNode.isVisibleToUser && lastImageNode.isLongClickable && lastImageNode.isEnabled) {
-                LogWrapper.logAppend("节点可交互，准备长按: bounds=${lastImageNode.getBoundsInScreen()}")
+                LogWrapper.logAppend("节点可交互。")
                 if (lastImageNode.click()) {
                     LogWrapper.logAppend("点击一下，打开图片。")
-                    LogWrapper.logAppend("延迟 2 秒")
-                    delay(2000)
+                    LogWrapper.logAppend("延迟 3 秒，充分等待")
+                    delay(3000)
                     LogWrapper.logAppend("点击底部的转发按钮。")
                     if (AssistsCore.gestureClick(646f,2261f)) {
                         return@next Step.get(StepTag.STEP_6, delay = 3000)
@@ -154,6 +165,7 @@ class Forward : StepImpl() {
 
         //4. 查找并点击"转发"按钮
         collector.next(StepTag.STEP_4) { step ->
+            setLastStep(StepTag.STEP_4)
             LogWrapper.logAppend("STEP_4: 开始执行 - 查找并点击转发按钮")
             // 1. 查找所有 text=转发 且 resource-id=obc 的 TextView
             val forwardTextNodes = AssistsCore.getAllNodes().filter {
@@ -180,6 +192,7 @@ class Forward : StepImpl() {
 
         // STEP_5，真正执行点击
         collector.next(StepTag.STEP_5) { step ->
+            setLastStep(StepTag.STEP_5)
             LogWrapper.logAppend("STEP_5: 开始执行 - 点击转发按钮")
             val forwardTextNodes = AssistsCore.getAllNodes().filter {
                 it.className == "android.widget.TextView"
@@ -194,8 +207,6 @@ class Forward : StepImpl() {
                     delay(1000)
                     clickableParent.click()
                     LogWrapper.logAppend("已点击转发按钮")
-                    isLastMsgText = false
-                    LogWrapper.logAppend("设置 isLastMsgText 为 false")
                     return@next Step.get(StepTag.STEP_6)
                 }
             } else {
@@ -211,6 +222,7 @@ class Forward : StepImpl() {
 
          //6. 选择转发对象
          collector.next(StepTag.STEP_6) { step ->
+             setLastStep(StepTag.STEP_6)
              LogWrapper.logAppend("STEP_6: 开始执行 - 选择转发对象")
              LogWrapper.logAppend("选择转发对象")
              // 1. 查找并点击"多选"按钮
@@ -233,6 +245,7 @@ class Forward : StepImpl() {
 
         if (DEBUG == true) {
             collector.next(StepTag.STEP_7) { step ->
+                setLastStep(StepTag.STEP_7)
                 LogWrapper.logAppend("STEP_7: 开始执行 - 查找并点击文件传输助手")
                 val group8Node = AssistsCore.getAllNodes().find {
                     it.className == "android.widget.TextView"
@@ -252,6 +265,7 @@ class Forward : StepImpl() {
         } else {
             //7. 点击"京东优质线报8群"
             collector.next(StepTag.STEP_7) { step ->
+                setLastStep(StepTag.STEP_7)
                 LogWrapper.logAppend("STEP_7: 开始执行 - 查找并点击京东优质线报8群")
                 val group8Node = AssistsCore.getAllNodes().find {
                     it.className == "android.widget.TextView"
@@ -271,6 +285,7 @@ class Forward : StepImpl() {
 
             //8. 点击"京东优质线报9群"
             collector.next(StepTag.STEP_8) { step ->
+                setLastStep(StepTag.STEP_8)
                 LogWrapper.logAppend("STEP_8: 开始执行 - 查找并点击京东优质线报9群")
                 val group9Node = AssistsCore.getAllNodes().find {
                     it.className == "android.widget.TextView"
@@ -291,6 +306,7 @@ class Forward : StepImpl() {
 
         //9. 点击"完成"按钮
         collector.next(StepTag.STEP_9) { step ->
+            setLastStep(StepTag.STEP_9)
             LogWrapper.logAppend("STEP_9: 开始执行 - 查找并点击完成按钮")
             val finishBtn = AssistsCore.getAllNodes().find {
                 (it.className == "android.widget.Button" || it.className == "android.widget.TextView")
@@ -311,6 +327,7 @@ class Forward : StepImpl() {
 
         //10. 点击"发送"按钮
         collector.next(StepTag.STEP_10) { step ->
+            setLastStep(StepTag.STEP_10)
             LogWrapper.logAppend("STEP_10: 开始执行 - 查找并点击发送按钮")
             val sendBtn = AssistsCore.getAllNodes().find {
                 (it.className == "android.widget.Button" || it.className == "android.widget.TextView")
@@ -322,6 +339,7 @@ class Forward : StepImpl() {
                 delay(2000)
                 sendBtn.click()
                 if (isLastMsgText == true) {
+                    LogWrapper.logAppend("isLastMsgText 为 true。")
                     LogWrapper.logAppend("已点击发送按钮，准备查找最新图片消息")
                     repeat(8) { attempt ->
                         if (AssistsCore.back()) {
@@ -354,6 +372,7 @@ class Forward : StepImpl() {
 
         // 11. 查找"阿汤哥会爆单吗@自在极意京粉线报"发送的最新一条文字消息，并log输出
         collector.next(StepTag.STEP_11) { step ->
+            setLastStep(StepTag.STEP_11)
             LogWrapper.logAppend("STEP_11: 开始执行 - 查找阿汤哥最新文字消息")
             val allMsgBlocks = AssistsCore.getAllNodes().filter {
                 it.className == "android.widget.RelativeLayout" && it.viewIdResourceName == "com.tencent.mm:id/bn1"
@@ -395,8 +414,9 @@ class Forward : StepImpl() {
 
             // 判断是否需要back
             if (latestMsg == null || latestMsg == lastTextMsg || (latestMsgIndex < latestImageIndex && latestImageIndex != -1)) {
-                LogWrapper.logAppend("无有效文字消息，回到微信首页")
-                return@next Step.get(StepTag.STEP_100, delay = 2000)
+                LogWrapper.logAppend("无有效文字消息，返回。")
+                AssistsCore.back()
+                return@next Step.get(StepTag.STEP_2, delay = 2000)
             }
 
             // 内容有变化，复制内容并处理
@@ -416,6 +436,7 @@ class Forward : StepImpl() {
 
         //12. 进入京粉并自动发消息
         collector.next(StepTag.STEP_12) { step ->
+            setLastStep(StepTag.STEP_12)
             LogWrapper.logAppend("STEP_12: 开始执行 - 查找并进入京粉")
             // 1. 查找所有聊天行（每一行的 LinearLayout，id=cj0）
             val allRows = AssistsCore.getAllNodes().filter {
@@ -453,6 +474,7 @@ class Forward : StepImpl() {
 
         //13. 切换到发消息并粘贴内容
         collector.next(StepTag.STEP_13) { step ->
+            setLastStep(StepTag.STEP_13)
             LogWrapper.logAppend("STEP_13: 开始执行 - 切换到发消息")
             val switchMsgNode = AssistsCore.getAllNodes().find {
                 it.className == "android.widget.ImageView"
@@ -474,6 +496,7 @@ class Forward : StepImpl() {
 
         //14. 点击输入框并粘贴内容
         collector.next(StepTag.STEP_14) { step ->
+            setLastStep(StepTag.STEP_14)
             LogWrapper.logAppend("STEP_14: 开始执行 - 点击输入框并粘贴内容")
             val editTextNode = AssistsCore.getAllNodes().find {
                 it.className == "android.widget.EditText"
@@ -506,6 +529,7 @@ class Forward : StepImpl() {
 
         //15. 点击发送按钮
         collector.next(StepTag.STEP_15) { step ->
+            setLastStep(StepTag.STEP_15)
             LogWrapper.logAppend("STEP_15: 开始执行 - 点击发送按钮")
             LogWrapper.logAppend("延迟 2 秒让节点加载")
             delay(2000) //延迟 2 秒让节点加载
@@ -526,6 +550,7 @@ class Forward : StepImpl() {
         }
 
         collector.next(StepTag.STEP_16) { step ->
+            setLastStep(StepTag.STEP_16)
             LogWrapper.logAppend("STEP_16: 开始执行 - 查找京粉最新文字消息")
             
             // 1. 获取所有消息块
@@ -580,6 +605,7 @@ class Forward : StepImpl() {
 
         //17. 双击顶部微信并进入文件传输助手
         collector.next(StepTag.STEP_17) { step ->
+            setLastStep(StepTag.STEP_17)
             LogWrapper.logAppend("STEP_17: 开始执行 - 双击顶部微信并进入文件传输助手")
             // 1. 查找顶部的"微信"文本
             val wechatNode = AssistsCore.getAllNodes().find {
@@ -622,6 +648,7 @@ class Forward : StepImpl() {
 
         //18. 在文件传输助手中粘贴内容并发送
         collector.next(StepTag.STEP_18) { step ->
+            setLastStep(StepTag.STEP_18)
             LogWrapper.logAppend("STEP_18: 开始执行 - 在文件传输助手中粘贴内容并发送")
             // 1. 查找输入框
             val editTextNode = AssistsCore.getAllNodes().find {
@@ -670,15 +697,16 @@ class Forward : StepImpl() {
 
         //19. 查找最新消息并转发
         collector.next(StepTag.STEP_19) { step ->
+            setLastStep(StepTag.STEP_19)
             LogWrapper.logAppend("STEP_19: 开始执行 - 展开消息全屏并转发")
             // 3. 双击消息
-            delay(3000)
-            AssistsCore.gestureClick(800f, 2050f)
-            delay(100)
-            AssistsCore.gestureClick(800f, 2050f)
-            LogWrapper.logAppend("双击右下角，展开消息全屏，开始分享")
             LogWrapper.logAppend("延迟 3 秒")
             delay(3000)
+            LogWrapper.logAppend("双击右下角，展开消息全屏，开始分享")
+            AssistsCore.gestureClick(800f, 2040f)
+            delay(100)
+            AssistsCore.gestureClick(800f, 2040f)
+            delay(5000)
 
             // 4. 查找并点击"分享"按钮
             val shareButton = AssistsCore.getAllNodes().find {
@@ -702,6 +730,7 @@ class Forward : StepImpl() {
 
         //100. 恢复到微信主页面
         collector.next(StepTag.STEP_100) { step ->
+            setLastStep(StepTag.STEP_100)
             LogWrapper.logAppend("STEP_100: 开始执行 - 恢复到微信主页面")
             
             // 1. 查找顶部的"微信"文本
