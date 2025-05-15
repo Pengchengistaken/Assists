@@ -496,21 +496,8 @@ class Forward : StepImpl() {
 
         //14. 点击输入框并粘贴内容
         collector.next(StepTag.STEP_14) { step ->
-            setLastStep(StepTag.STEP_14)
-            LogWrapper.logAppend("STEP_14: 开始执行 - 点击输入框并粘贴内容")
-            val editTextNode = AssistsCore.getAllNodes().find {
-                it.className == "android.widget.EditText"
-                    && it.viewIdResourceName == "com.tencent.mm:id/bkk"
-                    && it.isClickable && it.isEnabled && it.isFocusable
-            }
-            if (editTextNode != null) {
-                LogWrapper.logAppend("已定位到输入框，2秒后长按。")
-                delay(2000)
-                // 长按输入框
-                val longClickResult = editTextNode.longClick()
-                LogWrapper.logAppend("长按输入框结果: $longClickResult")
-                delay(2000) // 等待菜单出现
-
+            if (lastStep == StepTag.STEP_15) {
+                setLastStep(StepTag.STEP_14)
                 // 点击固定坐标的"粘贴"按钮
                 val clickResult = AssistsCore.gestureClick(120f, 2180f)
                 LogWrapper.logAppend("点击粘贴按钮结果: $clickResult")
@@ -522,8 +509,35 @@ class Forward : StepImpl() {
                     return@next Step.get(StepTag.STEP_14, delay = 2000)
                 }
             } else {
-                LogWrapper.logAppend("未找到输入框，重试")
-                return@next Step.get(StepTag.STEP_14, delay = 2000)
+                setLastStep(StepTag.STEP_14)
+                LogWrapper.logAppend("STEP_14: 开始执行 - 点击输入框并粘贴内容")
+                val editTextNode = AssistsCore.getAllNodes().find {
+                    it.className == "android.widget.EditText"
+                            && it.viewIdResourceName == "com.tencent.mm:id/bkk"
+                            && it.isClickable && it.isEnabled && it.isFocusable
+                }
+                if (editTextNode != null) {
+                    LogWrapper.logAppend("已定位到输入框，2秒后长按。")
+                    delay(2000)
+                    // 长按输入框
+                    val longClickResult = editTextNode.longClick()
+                    LogWrapper.logAppend("长按输入框结果: $longClickResult")
+                    delay(2000) // 等待菜单出现
+
+                    // 点击固定坐标的"粘贴"按钮
+                    val clickResult = AssistsCore.gestureClick(120f, 2180f)
+                    LogWrapper.logAppend("点击粘贴按钮结果: $clickResult")
+                    if (clickResult) {
+                        LogWrapper.logAppend("已点击粘贴按钮")
+                        return@next Step.get(StepTag.STEP_15, delay = 2000)
+                    } else {
+                        LogWrapper.logAppend("点击粘贴按钮失败，重试")
+                        return@next Step.get(StepTag.STEP_14, delay = 2000)
+                    }
+                } else {
+                    LogWrapper.logAppend("未找到输入框，重试")
+                    return@next Step.get(StepTag.STEP_14, delay = 2000)
+                }
             }
         }
 
@@ -545,7 +559,7 @@ class Forward : StepImpl() {
                 return@next Step.get(StepTag.STEP_16, delay = 5000)
             } else {
                 LogWrapper.logAppend("未找到发送按钮，重试")
-                return@next Step.get(StepTag.STEP_15, delay = 2000)
+                return@next Step.get(StepTag.STEP_14, delay = 2000)
             }
         }
 
