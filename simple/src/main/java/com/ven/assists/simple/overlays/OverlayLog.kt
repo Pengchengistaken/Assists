@@ -12,6 +12,7 @@ import com.ven.assists.window.AssistsWindowManager
 import com.ven.assists.window.AssistsWindowWrapper
 import com.ven.assists.simple.common.LogWrapper
 import com.ven.assists.simple.databinding.LogOverlayBinding
+import com.ven.assists.simple.step.Forward
 import com.ven.assists.stepper.StepManager
 import com.ven.assists.utils.CoroutineWrapper
 import kotlinx.coroutines.Dispatchers
@@ -24,6 +25,13 @@ object OverlayLog : AssistsServiceListener {
 
     var runAutoScrollListJob: Job? = null
     private var logCollectJob: Job? = null
+
+    fun updateDebugButtonColor(isDebug: Boolean) {
+        viewBinding?.btnDebug?.setBackgroundColor(
+            if (isDebug) android.graphics.Color.GREEN
+            else android.graphics.Color.GRAY
+        )
+    }
 
     private val onScrollTouchListener = object : OnTouchListener {
         @SuppressLint("ClickableViewAccessibility")
@@ -51,6 +59,9 @@ object OverlayLog : AssistsServiceListener {
                         CoroutineWrapper.launch { LogWrapper.clearLog() }
                     }
                     btnStop.setOnClickListener { StepManager.isStop = true }
+                    btnDebug.setOnClickListener {
+                        Forward.toggleDebug()
+                    }
                 }
             }
             return field
