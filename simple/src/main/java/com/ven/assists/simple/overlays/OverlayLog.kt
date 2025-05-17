@@ -84,8 +84,8 @@ object OverlayLog : AssistsServiceListener {
             viewBinding?.let {
                 if (field == null) {
                     field = AssistsWindowWrapper(it.root, wmLayoutParams = AssistsWindowManager.createLayoutParams().apply {
-                        width = (ScreenUtils.getScreenWidth() * 0.8).toInt()
-                        height = (ScreenUtils.getScreenHeight() * 0.5).toInt()
+                        width = (ScreenUtils.getScreenWidth() * 0.6).toInt()
+                        height = (ScreenUtils.getScreenHeight() * 0.3).toInt()
                     }, onClose = { hide() }).apply {
                         minWidth = (ScreenUtils.getScreenWidth() * 0.6).toInt()
                         minHeight = (ScreenUtils.getScreenHeight() * 0.4).toInt()
