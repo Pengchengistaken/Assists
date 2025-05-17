@@ -777,9 +777,8 @@ class Forward : StepImpl() {
                 LogWrapper.logAppend("设置 isLastMsgText 为 true")
                 return@next Step.get(StepTag.STEP_6, delay = 2000)
             } else {
-                LogWrapper.logAppend("未找到分享按钮，重试")
-                AssistsCore.back()
-                return@next Step.get(StepTag.STEP_19, delay = 2000)
+                LogWrapper.logAppend("未找到分享按钮，尝试回到微信主页面。")
+                return@next Step.get(StepTag.STEP_100, delay = 2000)
             }
         }
 
