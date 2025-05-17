@@ -103,6 +103,7 @@ class Forward : StepImpl() {
             LogWrapper.logAppend("设置 isLastMsgText 为 false")
             setLastStep(StepTag.STEP_3)
             LogWrapper.logAppend("STEP_3: 开始执行 - 获取最后一张图片")
+            
             //滑动一下聊天窗口
             AssistsWindowManager.nonTouchableByAll()
             delay(250)
@@ -117,18 +118,43 @@ class Forward : StepImpl() {
             AssistsWindowManager.touchableByAll()
             delay(1000)
 
-            // 1. 获取所有图片消息节点
-            val allImageNodes = AssistsCore.getAllNodes().filter {
-                it.viewIdResourceName == "com.tencent.mm:id/bkg" && it.isClickable && it.isLongClickable
+            // 1. 获取所有消息块
+            val allMsgBlocks = AssistsCore.getAllNodes().filter {
+                it.className == "android.widget.RelativeLayout" && it.viewIdResourceName == "com.tencent.mm:id/bn1"
             }
-            if (allImageNodes.isEmpty()) {
-                LogWrapper.logAppend("未找到图片消息，回到微信首页。")
-                return@next Step.get(StepTag.STEP_100, delay = 1000)
+
+            // 2. 查找阿汤哥发送的最新图片消息
+            var targetImageNode: android.view.accessibility.AccessibilityNodeInfo? = null
+            var currentImageBounds: String? = null
+
+            // 倒序遍历，优先取最新
+            for (msgBlock in allMsgBlocks.reversed()) {
+                // 查找发送者节点
+                LogWrapper.logAppend("查找阿汤哥的图片消息")
+                val senderNode = msgBlock.getNodes().find {
+                    it.className == "android.widget.TextView"
+                        && it.viewIdResourceName == "com.tencent.mm:id/brc"
+                        && it.text?.toString()?.contains("阿汤哥会爆单吗＠自在极意京粉线报") == true
+                }
+
+                // 如果找到阿汤哥的消息，再查找图片节点
+                if (senderNode != null) {
+                    val imageNode = msgBlock.getNodes().find {
+                        it.viewIdResourceName == "com.tencent.mm:id/bkg" && it.isClickable && it.isLongClickable
+                    }
+                    if (imageNode != null) {
+                        targetImageNode = imageNode
+                        currentImageBounds = imageNode.getBoundsInScreen().toShortString()
+                        break
+                    }
+                }
             }
-            // 2. 取最后一个图片节点
-            val lastImageNode = allImageNodes.last()
-            // 3. 记录唯一特征（bounds）
-            val currentImageBounds = lastImageNode.getBoundsInScreen().toShortString()
+
+            if (targetImageNode == null) {
+                LogWrapper.logAppend("未找到阿汤哥的图片消息，返回。")
+                AssistsCore.back()
+            }
+
             LogWrapper.logAppend("当前图片唯一特征: $currentImageBounds，历史特征: $lastImageBounds")
             if (currentImageBounds == lastImageBounds) {
                 LogWrapper.logAppend("图片未变化，无需转发，发送返回事件，30秒后重试")
@@ -138,10 +164,10 @@ class Forward : StepImpl() {
             lastImageBounds = currentImageBounds
             LogWrapper.logAppend("图片已变化，准备转发")
 
-            // 4. 长按图片
-            if (lastImageNode.isVisibleToUser && lastImageNode.isLongClickable && lastImageNode.isEnabled) {
+            // 4. 点击图片
+            if (targetImageNode?.isVisibleToUser!! && targetImageNode.isLongClickable && targetImageNode.isEnabled) {
                 LogWrapper.logAppend("节点可交互。")
-                if (lastImageNode.click()) {
+                if (targetImageNode.click()) {
                     LogWrapper.logAppend("点击一下，打开图片。")
                     LogWrapper.logAppend("延迟 3 秒，充分等待")
                     delay(3000)
@@ -152,12 +178,12 @@ class Forward : StepImpl() {
                 }
                 LogWrapper.logAppend("延迟 2 秒")
                 delay(2000)
-                if (lastImageNode.longClick()) {
+                if (targetImageNode.longClick()) {
                     return@next Step.get(StepTag.STEP_4, delay = 3000)
                 }
                 return@next Step.get(StepTag.STEP_3, delay = 3000)
             } else {
-                LogWrapper.logAppend("节点不可交互，isVisibleToUser=${lastImageNode.isVisibleToUser}, isLongClickable=${lastImageNode.isLongClickable}, isEnabled=${lastImageNode.isEnabled}")
+                LogWrapper.logAppend("节点不可交互，isVisibleToUser=${targetImageNode.isVisibleToUser}, isLongClickable=${targetImageNode.isLongClickable}, isEnabled=${targetImageNode.isEnabled}")
                 // 延迟重试
                 return@next Step.get(StepTag.STEP_3, delay = 2000)
             }
@@ -378,7 +404,6 @@ class Forward : StepImpl() {
                 it.className == "android.widget.RelativeLayout" && it.viewIdResourceName == "com.tencent.mm:id/bn1"
             }
 
-            val targetSender = "阿汤哥会爆单吗＠自在极意京粉线报"
             var latestMsg: String? = null
             var latestMsgNode: android.view.accessibility.AccessibilityNodeInfo? = null
             var latestMsgIndex = -1
@@ -386,7 +411,14 @@ class Forward : StepImpl() {
 
             // 倒序遍历，优先取最新
             for ((i, msgBlock) in allMsgBlocks.withIndex().reversed()) {
-                // 1. 查找图片节点
+                // 1. 查找发送者节点
+                val senderNode = msgBlock.getNodes().find {
+                    it.className == "android.widget.TextView"
+                        && it.viewIdResourceName == "com.tencent.mm:id/brc"
+                        && it.text?.toString()?.contains("阿汤哥会爆单吗＠自在极意京粉线报") == true
+                }
+
+                // 2. 查找图片节点
                 val imageNode = msgBlock.getNodes().find {
                     it.viewIdResourceName == "com.tencent.mm:id/bkg"
                 }
@@ -394,21 +426,18 @@ class Forward : StepImpl() {
                     latestImageIndex = i
                 }
 
-                // 2. 查找阿汤哥文字消息节点
-                val senderNode = msgBlock.getNodes().find {
-                    it.className == "android.widget.TextView"
-                        && it.viewIdResourceName == "com.tencent.mm:id/brc"
-                        && it.text?.toString()?.contains(targetSender) == true
-                }
-                val contentNode = msgBlock.getNodes().find {
-                    it.className == "android.widget.TextView"
-                        && it.viewIdResourceName == "com.tencent.mm:id/bkl"
-                        && !it.text.isNullOrBlank()
-                }
-                if (latestMsgIndex == -1 && senderNode != null && contentNode != null) {
-                    latestMsg = contentNode.text?.toString()
-                    latestMsgNode = contentNode
-                    latestMsgIndex = i
+                // 3. 如果找到阿汤哥的消息，再查找文字内容节点
+                if (senderNode != null) {
+                    val contentNode = msgBlock.getNodes().find {
+                        it.className == "android.widget.TextView"
+                            && it.viewIdResourceName == "com.tencent.mm:id/bkl"
+                            && !it.text.isNullOrBlank()
+                    }
+                    if (latestMsgIndex == -1 && contentNode != null) {
+                        latestMsg = contentNode.text?.toString()
+                        latestMsgNode = contentNode
+                        latestMsgIndex = i
+                    }
                 }
             }
 
@@ -427,7 +456,6 @@ class Forward : StepImpl() {
                 val clip = android.content.ClipData.newPlainText("msg", processedMsg)
                 clipboard?.setPrimaryClip(clip)
                 LogWrapper.logAppend("已复制最新消息到剪贴板: $processedMsg")
-//                LogWrapper.logAppend("阿汤哥最新消息内容: $processedMsg")
                 delay(2000)
                 AssistsCore.back()
             }
