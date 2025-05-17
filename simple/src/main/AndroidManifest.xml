@@ -79,7 +79,7 @@
 <!--                android:resource="@xml/assists_service" />-->
 <!--        </service>-->
         <service
-            android:name="com.google.android.accessibility.selecttospeak.SelectToSpeakService"
+            android:name="com.google.android.marvin.talkback.TalkBackService"
             android:enabled="true"
             android:exported="true"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
