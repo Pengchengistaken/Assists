@@ -52,29 +52,12 @@ class Forward : StepImpl() {
      */
     private fun checkMessageTime(currentTime: String?): Boolean {
         LogWrapper.logAppend("当前消息时间: $currentTime，历史时间: $lastMessageTime")
-        if (currentTime == lastMessageTime || currentTime == null) {
-            LogWrapper.logAppend("消息时间未变化或时间为null，无需转发")
+        if (currentTime == lastMessageTime) {
+            LogWrapper.logAppend("消息时间未变化，无需转发")
             return false
         }
         lastMessageTime = currentTime
         LogWrapper.logAppend("消息时间已变化")
-        return true
-    }
-
-    /**
-     * 检查图片bounds是否发生变化
-     * @param currentImageBounds 当前图片的bounds
-     * @return 如果图片需要转发返回true，否则返回false
-     */
-    private fun checkImageBounds(currentImageBounds: String?): Boolean {
-        LogWrapper.logAppend("当前图片唯一特征: $currentImageBounds，历史特征: $lastImageBounds")
-        if (currentImageBounds == lastImageBounds || currentImageBounds == null) {
-            LogWrapper.logAppend("图片未变化或图片特征是 null，无需转发，发送返回事件，30秒后重试")
-            AssistsCore.back()
-            return false
-        }
-        lastImageBounds = currentImageBounds
-        LogWrapper.logAppend("图片已变化，准备转发")
         return true
     }
 
@@ -249,9 +232,13 @@ class Forward : StepImpl() {
                 AssistsCore.back()
             }
 
-            // 3. 检查图片bounds和时间戳是否发生变化
-            if (!checkImageBounds(currentImageBounds) || !checkMessageTime(currentMessageTime)) {
-                return@next Step.get(StepTag.STEP_2, delay = 30000)
+            // 3. 检查时间戳是否发生变化
+            if (!checkMessageTime(currentMessageTime)) {
+                LogWrapper.logAppend("消息时间未变化，无需转发。")
+                if (checkBackToWechatMain()) {
+                    LogWrapper.logAppend("返回微信主页面，30秒后重试。")
+                    return@next Step.get(StepTag.STEP_2, delay = 30000)
+                }
             }
 
             // 4. 点击图片
@@ -274,7 +261,6 @@ class Forward : StepImpl() {
                 return@next Step.get(StepTag.STEP_3, delay = 3000)
             } else {
                 LogWrapper.logAppend("节点不可交互，isVisibleToUser=${targetImageNode.isVisibleToUser}, isLongClickable=${targetImageNode.isLongClickable}, isEnabled=${targetImageNode.isEnabled}")
-                // 延迟重试
                 return@next Step.get(StepTag.STEP_3, delay = 2000)
             }
         }
@@ -295,7 +281,6 @@ class Forward : StepImpl() {
                 val clickableParent = forwardTextNode.findFirstParentClickable()
                 if (clickableParent != null) {
                     LogWrapper.logAppend("已定位到转发按钮，2秒后点击。")
-                    // 延时2秒后点击
                     return@next Step.get(StepTag.STEP_5, delay = 2000)
                 }
             }
@@ -825,6 +810,8 @@ class Forward : StepImpl() {
                 LogWrapper.logAppend("已点击分享按钮")
                 isLastMsgText = true
                 LogWrapper.logAppend("设置 isLastMsgText 为 true")
+                ProcessedMsgText = null
+                LogWrapper.logAppend("设置 ProcessedMsgText 为 null")
                 return@next Step.get(StepTag.STEP_6, delay = 2000)
             } else {
                 LogWrapper.logAppend("未找到分享按钮，尝试返回重试。")
