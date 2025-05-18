@@ -31,6 +31,7 @@ class Forward : StepImpl() {
         private var lastStep: Int? = 0 // 记录最后执行的步骤
         private var ProcessedMsgText: String? = null // 记录全局内容
         private var lastMessageTime: String? = null // 记录上一条消息的时间
+        private var retryCount: Int = 0 // 记录重试次数
 
         private fun setLastStep(step: Int) {
             lastStep = step
@@ -42,6 +43,14 @@ class Forward : StepImpl() {
             LogWrapper.logAppend("Debug模式已${if (DEBUG) "开启" else "关闭"}")
             // 通知按钮颜色变化
             OverlayLog.updateDebugButtonColor(DEBUG)
+        }
+
+        private fun resetRetryCount() {
+            retryCount = 0
+        }
+
+        private fun incrementRetryCount(): Int {
+            return ++retryCount
         }
     }
 
@@ -425,12 +434,21 @@ class Forward : StepImpl() {
             }
             if (finishBtn != null) {
                 LogWrapper.logAppend("已定位到完成按钮，2秒后点击。")
+                resetRetryCount()
                 delay(2000)
                 finishBtn.click()
                 LogWrapper.logAppend("已点击完成按钮")
                 return@next Step.get(StepTag.STEP_10, delay = 2000)
             } else {
-                LogWrapper.logAppend("未找到完成按钮，重试")
+                val currentRetry = incrementRetryCount()
+                LogWrapper.logAppend("未找到完成按钮，第 $currentRetry 次重试")
+                if (currentRetry >= 10) {
+                    LogWrapper.logAppend("重试次数超过10次，尝试返回微信主页面")
+                    resetRetryCount()
+                    if (checkBackToWechatMain()) {
+                        return@next Step.get(StepTag.STEP_2, delay = 2000)
+                    }
+                }
                 return@next Step.get(StepTag.STEP_9, delay = 2000)
             }
         }
