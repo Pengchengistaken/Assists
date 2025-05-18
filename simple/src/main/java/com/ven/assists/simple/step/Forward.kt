@@ -151,8 +151,8 @@ class Forward : StepImpl() {
             delay(250)
             val x = ScreenUtils.getAppScreenWidth() / 2F
             val distance = ScreenUtils.getAppScreenHeight() / 2F
-            val startY = distance + distance / 2F
-            val endY = distance - distance / 2F
+            val startY = distance - distance / 2F
+            val endY = distance + distance / 2F
             LogWrapper.logAppend("滑动：$x/$startY,$x/$endY")
             AssistsCore.gesture(
                 floatArrayOf(x, startY), floatArrayOf(x, endY), 0, 1000L
