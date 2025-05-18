@@ -30,6 +30,7 @@ class Forward : StepImpl() {
         private var isLastMsgText: Boolean? = false
         private var lastStep: Int? = 0 // 记录最后执行的步骤
         private var ProcessedMsgText: String? = null // 记录全局内容
+        private var lastMessageTime: String? = null // 记录上一条消息的时间
 
         private fun setLastStep(step: Int) {
             lastStep = step
@@ -42,6 +43,39 @@ class Forward : StepImpl() {
             // 通知按钮颜色变化
             OverlayLog.updateDebugButtonColor(DEBUG)
         }
+    }
+
+    /**
+     * 检查消息时间戳是否发生变化
+     * @param currentTime 当前消息的时间戳
+     * @return 如果时间戳发生变化返回true，否则返回false
+     */
+    private fun checkMessageTime(currentTime: String?): Boolean {
+        LogWrapper.logAppend("当前消息时间: $currentTime，历史时间: $lastMessageTime")
+        if (currentTime == lastMessageTime || currentTime == null) {
+            LogWrapper.logAppend("消息时间未变化或时间为null，无需转发")
+            return false
+        }
+        lastMessageTime = currentTime
+        LogWrapper.logAppend("消息时间已变化")
+        return true
+    }
+
+    /**
+     * 检查图片bounds是否发生变化
+     * @param currentImageBounds 当前图片的bounds
+     * @return 如果图片需要转发返回true，否则返回false
+     */
+    private fun checkImageBounds(currentImageBounds: String?): Boolean {
+        LogWrapper.logAppend("当前图片唯一特征: $currentImageBounds，历史特征: $lastImageBounds")
+        if (currentImageBounds == lastImageBounds || currentImageBounds == null) {
+            LogWrapper.logAppend("图片未变化或图片特征是 null，无需转发，发送返回事件，30秒后重试")
+            AssistsCore.back()
+            return false
+        }
+        lastImageBounds = currentImageBounds
+        LogWrapper.logAppend("图片已变化，准备转发")
+        return true
     }
 
     /**
@@ -177,6 +211,7 @@ class Forward : StepImpl() {
             // 2. 查找阿汤哥发送的最新图片消息
             var targetImageNode: android.view.accessibility.AccessibilityNodeInfo? = null
             var currentImageBounds: String? = null
+            var currentMessageTime: String? = null
 
             // 倒序遍历，优先取最新
             for (msgBlock in allMsgBlocks.reversed()) {
@@ -189,8 +224,15 @@ class Forward : StepImpl() {
                         ?.contains("阿汤哥会爆单吗＠自在极意京粉线报") == true
                 }
 
-                // 如果找到阿汤哥的消息，再查找图片节点
+                // 如果找到阿汤哥的消息，再查找图片节点和时间节点
                 if (senderNode != null) {
+                    // 查找时间节点
+                    val timeNode = msgBlock.getNodes().find {
+                        it.className == "android.widget.TextView"
+                                && it.viewIdResourceName == "com.tencent.mm:id/br1"
+                    }
+                    currentMessageTime = timeNode?.text?.toString()
+
                     val imageNode = msgBlock.getNodes().find {
                         it.viewIdResourceName == "com.tencent.mm:id/bkg" && it.isClickable && it.isLongClickable
                     }
@@ -207,14 +249,10 @@ class Forward : StepImpl() {
                 AssistsCore.back()
             }
 
-            LogWrapper.logAppend("当前图片唯一特征: $currentImageBounds，历史特征: $lastImageBounds")
-            if (currentImageBounds == lastImageBounds || currentImageBounds == null) {
-                LogWrapper.logAppend("图片未变化或图片特征是 null，无需转发，发送返回事件，30秒后重试")
-                AssistsCore.back()
+            // 3. 检查图片bounds和时间戳是否发生变化
+            if (!checkImageBounds(currentImageBounds) || !checkMessageTime(currentMessageTime)) {
                 return@next Step.get(StepTag.STEP_2, delay = 30000)
             }
-            lastImageBounds = currentImageBounds
-            LogWrapper.logAppend("图片已变化，准备转发")
 
             // 4. 点击图片
             if (targetImageNode?.isVisibleToUser!! && targetImageNode.isLongClickable && targetImageNode.isEnabled) {
@@ -739,6 +777,7 @@ class Forward : StepImpl() {
                 if (!ProcessedMsgText.isNullOrBlank()) {
                     editTextNode.setNodeText(ProcessedMsgText)
                     LogWrapper.logAppend("已设置文本内容。")
+                    delay(2000)
                 }
                     // 4. 查找并点击发送按钮
                     val sendBtn = AssistsCore.getAllNodes().find {
