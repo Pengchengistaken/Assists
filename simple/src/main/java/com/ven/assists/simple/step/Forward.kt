@@ -115,7 +115,15 @@ class Forward : StepImpl() {
                 return true
             }
         }
-        return false
+        LogWrapper.logAppend("未能返回微信主页面，重新启动微信")
+        Intent().apply {
+            addCategory(Intent.CATEGORY_LAUNCHER)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            component = ComponentName("com.tencent.mm", "com.tencent.mm.ui.LauncherUI")
+            AssistsService.instance?.startActivity(this)
+        }
+        delay(3000) // 等待微信启动
+        return isWechatMainPage()
     }
 
     override fun onImpl(collector: StepCollector) {
