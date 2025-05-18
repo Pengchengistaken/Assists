@@ -471,22 +471,9 @@ class Forward : StepImpl() {
             lastTextMsg = latestMsg
             ProcessedMsgText = processAtangText(latestMsg)
 
-            repeat(5) { attempt ->
-                if (AssistsCore.back()) {
-                    LogWrapper.logAppend("返回第 ${attempt + 1} 次")
-                }
-                delay(2000)
-                val wechatNode = AssistsCore.getAllNodes().find {
-                    it.className == "android.widget.TextView"
-                            && it.viewIdResourceName == "android:id/text1"
-                            && it.text?.toString() == "微信"
-                }
-                if (wechatNode != null) {
-                    LogWrapper.logAppend("到了微信主页面。")
-                    return@next Step.get(StepTag.STEP_12, delay = 3000)
-                }
+            if (checkBackToWechatMain()) {
+                return@next Step.get(StepTag.STEP_12, delay = 3000)
             }
-
             return@next Step.get(StepTag.STEP_12, delay = 2000)
         }
 
