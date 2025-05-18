@@ -146,20 +146,6 @@ class Forward : StepImpl() {
             setLastStep(StepTag.STEP_3)
             LogWrapper.logAppend("STEP_3: 开始执行 - 获取最后一张图片")
 
-            //滑动一下聊天窗口
-            AssistsWindowManager.nonTouchableByAll()
-            delay(250)
-            val x = ScreenUtils.getAppScreenWidth() / 2F
-            val distance = ScreenUtils.getAppScreenHeight() / 2F
-            val startY = distance - distance / 2F
-            val endY = distance + distance / 2F
-            LogWrapper.logAppend("滑动：$x/$startY,$x/$endY")
-            AssistsCore.gesture(
-                floatArrayOf(x, startY), floatArrayOf(x, endY), 0, 1000L
-            )
-            AssistsWindowManager.touchableByAll()
-            delay(1000)
-
             // 1. 获取所有消息块
             val allMsgBlocks = AssistsCore.getAllNodes().filter {
                 it.className == "android.widget.RelativeLayout" && it.viewIdResourceName == "com.tencent.mm:id/bn1"
