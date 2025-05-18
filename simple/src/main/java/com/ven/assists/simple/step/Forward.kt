@@ -10,6 +10,7 @@ import com.ven.assists.AssistsCore.getBoundsInScreen
 import com.ven.assists.AssistsCore.getNodes
 import com.ven.assists.AssistsCore.longClick
 import com.ven.assists.AssistsCore.scrollForward
+import com.ven.assists.AssistsCore.setNodeText
 import com.ven.assists.service.AssistsService
 import com.ven.assists.simple.common.LogWrapper
 import com.ven.assists.simple.overlays.OverlayLog
@@ -26,10 +27,11 @@ class Forward : StepImpl() {
     // 用于存储最后一张图片的 bounds
     companion object {
         private var lastImageBounds: String? = null
-        private var lastTextMsg: String? = null // 新增：记录上一次的文字消息内容
+        private var lastTextMsg: String? = null // 记录上一次的文字消息内容
         private var DEBUG: Boolean = false
         private var isLastMsgText: Boolean? = false
-        private var lastStep: Int? = 0 // 新增：记录最后执行的步骤
+        private var lastStep: Int? = 0 // 记录最后执行的步骤
+        private var ProcessedMsgText: String? = null // 记录全局内容
 
         private fun setLastStep(step: Int) {
             lastStep = step
@@ -165,8 +167,8 @@ class Forward : StepImpl() {
             }
 
             LogWrapper.logAppend("当前图片唯一特征: $currentImageBounds，历史特征: $lastImageBounds")
-            if (currentImageBounds == lastImageBounds) {
-                LogWrapper.logAppend("图片未变化，无需转发，发送返回事件，30秒后重试")
+            if (currentImageBounds == lastImageBounds || currentImageBounds == null) {
+                LogWrapper.logAppend("图片未变化或图片特征是 null，无需转发，发送返回事件，30秒后重试")
                 AssistsCore.back()
                 return@next Step.get(StepTag.STEP_2, delay = 30000)
             }
@@ -461,16 +463,24 @@ class Forward : StepImpl() {
 
             // 内容有变化，复制内容并处理
             lastTextMsg = latestMsg
-            val processedMsg = processAtangText(latestMsg)
-            latestMsgNode?.let { node ->
-                val clipboard =
-                    AssistsService.instance?.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
-                val clip = android.content.ClipData.newPlainText("msg", processedMsg)
-                clipboard?.setPrimaryClip(clip)
-                LogWrapper.logAppend("已复制最新消息到剪贴板: $processedMsg")
+            ProcessedMsgText = processAtangText(latestMsg)
+
+            repeat(5) { attempt ->
+                if (AssistsCore.back()) {
+                    LogWrapper.logAppend("返回第 ${attempt + 1} 次")
+                }
                 delay(2000)
-                AssistsCore.back()
+                val wechatNode = AssistsCore.getAllNodes().find {
+                    it.className == "android.widget.TextView"
+                            && it.viewIdResourceName == "android:id/text1"
+                            && it.text?.toString() == "微信"
+                }
+                if (wechatNode != null) {
+                    LogWrapper.logAppend("到了微信主页面。")
+                    return@next Step.get(StepTag.STEP_12, delay = 3000)
+                }
             }
+
             return@next Step.get(StepTag.STEP_12, delay = 2000)
         }
 
@@ -534,51 +544,54 @@ class Forward : StepImpl() {
             }
         }
 
-        //14. 点击输入框并粘贴内容
+        //14. 点击输入框并设置文本内容
         collector.next(StepTag.STEP_14) { step ->
+            setLastStep(StepTag.STEP_14)
+            LogWrapper.logAppend("STEP_14: 开始执行 - 点击输入框并设置文本内容")
             if (lastStep == StepTag.STEP_15) {
-                setLastStep(StepTag.STEP_14)
-                // 点击固定坐标的"粘贴"按钮
-                val clickResult = AssistsCore.gestureClick(120f, 2180f)
-                LogWrapper.logAppend("点击粘贴按钮结果: $clickResult")
-                if (clickResult) {
-                    LogWrapper.logAppend("已点击粘贴按钮")
-                    return@next Step.get(StepTag.STEP_15, delay = 2000)
-                } else {
-                    LogWrapper.logAppend("点击粘贴按钮失败，重试")
-                    return@next Step.get(StepTag.STEP_14, delay = 2000)
-                }
-            } else {
-                setLastStep(StepTag.STEP_14)
-                LogWrapper.logAppend("STEP_14: 开始执行 - 点击输入框并粘贴内容")
                 val editTextNode = AssistsCore.getAllNodes().find {
                     it.className == "android.widget.EditText"
                             && it.viewIdResourceName == "com.tencent.mm:id/bkk"
                             && it.isClickable && it.isEnabled && it.isFocusable
                 }
-                if (editTextNode != null) {
-                    LogWrapper.logAppend("已定位到输入框，2秒后长按。")
-                    delay(2000)
-                    // 长按输入框
-                    val longClickResult = editTextNode.longClick()
-                    LogWrapper.logAppend("长按输入框结果: $longClickResult")
-                    delay(2000) // 等待菜单出现
 
-                    // 点击固定坐标的"粘贴"按钮
-                    val clickResult = AssistsCore.gestureClick(120f, 2180f)
-                    LogWrapper.logAppend("点击粘贴按钮结果: $clickResult")
-                    if (clickResult) {
-                        LogWrapper.logAppend("已点击粘贴按钮")
+                if (editTextNode != null) {
+                    if (!ProcessedMsgText.isNullOrBlank()) {
+                        editTextNode.setNodeText(ProcessedMsgText)
+                        LogWrapper.logAppend("已设置文本内容")
                         return@next Step.get(StepTag.STEP_15, delay = 2000)
-                    } else {
-                        LogWrapper.logAppend("点击粘贴按钮失败，重试")
-                        return@next Step.get(StepTag.STEP_14, delay = 2000)
                     }
-                } else {
-                    LogWrapper.logAppend("未找到输入框，重试")
+                    LogWrapper.logAppend("文本内容为空，重试")
                     return@next Step.get(StepTag.STEP_14, delay = 2000)
                 }
+                LogWrapper.logAppend("未找到输入框，重试")
+                return@next Step.get(StepTag.STEP_14, delay = 2000)
             }
+
+            // 查找输入框
+            val editTextNode = AssistsCore.getAllNodes().find {
+                it.className == "android.widget.EditText"
+                        && it.viewIdResourceName == "com.tencent.mm:id/bkk"
+                        && it.isClickable && it.isEnabled && it.isFocusable
+            }
+
+            if (editTextNode != null) {
+                LogWrapper.logAppend("已定位到输入框，2秒后点击。")
+                delay(2000)
+                editTextNode.click()
+                delay(1000)
+
+                if (!ProcessedMsgText.isNullOrBlank()) {
+                    editTextNode.setNodeText(ProcessedMsgText)
+                    LogWrapper.logAppend("已设置文本内容")
+                    return@next Step.get(StepTag.STEP_15, delay = 2000)
+                }
+                LogWrapper.logAppend("文本内容为空，重试")
+                return@next Step.get(StepTag.STEP_14, delay = 2000)
+            }
+
+            LogWrapper.logAppend("未找到输入框，重试")
+            return@next Step.get(StepTag.STEP_14, delay = 2000)
         }
 
         //15. 点击发送按钮
@@ -634,24 +647,30 @@ class Forward : StepImpl() {
 
             val finalLatestMsg = latestMsg
             if (finalLatestMsg != null) {
-                // 3. 处理消息内容
+                // 3. 处理消息内容,复制到全局变量
                 val processedMsg = processJingfenText(finalLatestMsg)
                 if (processedMsg.isNotEmpty()) {
-                    // 4. 复制到剪贴板
-                    latestMsgNode?.let { node ->
-                        val clipboard =
-                            AssistsService.instance?.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
-                        val clip = android.content.ClipData.newPlainText("msg", processedMsg)
-                        clipboard?.setPrimaryClip(clip)
-                        LogWrapper.logAppend("已复制处理后的消息到剪贴板: $processedMsg")
-                    }
-                    AssistsCore.back()
-                    return@next Step.get(StepTag.STEP_17, delay = 2000)
+                    ProcessedMsgText = processedMsg
+                    LogWrapper.logAppend("复制到全局变量ProcessedMsgText。")
                 } else {
                     LogWrapper.logAppend("消息内容不包含jd.com链接，跳过处理")
-                    AssistsCore.back()
-                    return@next Step.get(StepTag.STEP_17, delay = 2000)
                 }
+                repeat(5) { attempt ->
+                    if (AssistsCore.back()) {
+                        LogWrapper.logAppend("返回第 ${attempt + 1} 次")
+                    }
+                    delay(2000)
+                    val wechatNode = AssistsCore.getAllNodes().find {
+                        it.className == "android.widget.TextView"
+                                && it.viewIdResourceName == "android:id/text1"
+                                && it.text?.toString() == "微信"
+                    }
+                    if (wechatNode != null) {
+                        LogWrapper.logAppend("到了微信主页面。")
+                        return@next Step.get(StepTag.STEP_17, delay = 3000)
+                    }
+                }
+                return@next Step.get(StepTag.STEP_17, delay = 2000)
             } else {
                 LogWrapper.logAppend("未找到京粉的文字消息，重试")
                 return@next Step.get(StepTag.STEP_16, delay = 2000)
@@ -713,18 +732,10 @@ class Forward : StepImpl() {
             }
 
             if (editTextNode != null) {
-                // 2. 长按输入框
-                val longClickResult = editTextNode.longClick()
-                LogWrapper.logAppend("长按输入框结果: $longClickResult")
-                delay(1000) // 等待菜单出现
-
-                // 3. 点击固定坐标的"粘贴"按钮
-                val clickResult = AssistsCore.gestureClick(120f, 2180f)
-                LogWrapper.logAppend("点击粘贴按钮结果: $clickResult")
-                if (clickResult) {
-                    LogWrapper.logAppend("已点击粘贴按钮")
-                    delay(1000) // 等待粘贴完成
-
+                if (!ProcessedMsgText.isNullOrBlank()) {
+                    editTextNode.setNodeText(ProcessedMsgText)
+                    LogWrapper.logAppend("已设置文本内容。")
+                }
                     // 4. 查找并点击发送按钮
                     val sendBtn = AssistsCore.getAllNodes().find {
                         (it.className == "android.widget.Button" || it.className == "android.widget.TextView")
@@ -740,10 +751,6 @@ class Forward : StepImpl() {
                         LogWrapper.logAppend("未找到发送按钮，重试")
                         return@next Step.get(StepTag.STEP_18, delay = 2000)
                     }
-                } else {
-                    LogWrapper.logAppend("点击粘贴按钮失败，重试")
-                    return@next Step.get(StepTag.STEP_18, delay = 2000)
-                }
             } else {
                 LogWrapper.logAppend("未找到输入框，重试")
                 return@next Step.get(StepTag.STEP_18, delay = 2000)
@@ -759,7 +766,7 @@ class Forward : StepImpl() {
             delay(3000)
             LogWrapper.logAppend("双击右下角，展开消息全屏，开始分享")
             AssistsCore.gestureClick(800f, 2040f)
-            delay(100)
+            delay(30)
             AssistsCore.gestureClick(800f, 2040f)
             delay(5000)
 
@@ -777,8 +784,9 @@ class Forward : StepImpl() {
                 LogWrapper.logAppend("设置 isLastMsgText 为 true")
                 return@next Step.get(StepTag.STEP_6, delay = 2000)
             } else {
-                LogWrapper.logAppend("未找到分享按钮，尝试回到微信主页面。")
-                return@next Step.get(StepTag.STEP_100, delay = 2000)
+                LogWrapper.logAppend("未找到分享按钮，尝试返回重试。")
+                AssistsCore.back()
+                return@next Step.get(StepTag.STEP_19, delay = 1000)
             }
         }
 
