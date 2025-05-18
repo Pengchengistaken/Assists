@@ -46,6 +46,38 @@ class Forward : StepImpl() {
         }
     }
 
+    /**
+     * 判断当前是否在微信主页面
+     * @return 是否在微信主页面
+     */
+    private fun isWechatMainPage(): Boolean {
+        return AssistsCore.getAllNodes().any {
+            it.className == "android.widget.TextView" &&
+            it.viewIdResourceName == "android:id/text1" &&
+            it.text?.toString() == "微信"
+        }
+    }
+
+    /**
+     * 检查是否回到微信主页面
+     * @param maxAttempts 最大尝试次数
+     * @param delayMs 每次尝试之间的延迟时间（毫秒）
+     * @return 是否成功回到微信主页面
+     */
+    private suspend fun checkBackToWechatMain(maxAttempts: Int = 5, delayMs: Long = 2000): Boolean {
+        repeat(maxAttempts) { attempt ->
+            if (AssistsCore.back()) {
+                LogWrapper.logAppend("返回第 ${attempt + 1} 次")
+            }
+            delay(delayMs)
+            if (isWechatMainPage()) {
+                LogWrapper.logAppend("到了微信主页面。")
+                return true
+            }
+        }
+        return false
+    }
+
     override fun onImpl(collector: StepCollector) {
         //1. 打开微信
         collector.next(StepTag.STEP_1, isRunCoroutineIO = true) {
@@ -379,20 +411,8 @@ class Forward : StepImpl() {
                 if (isLastMsgText == true) {
                     LogWrapper.logAppend("isLastMsgText 为 true。")
                     LogWrapper.logAppend("已点击发送按钮，准备查找最新图片消息")
-                    repeat(8) { attempt ->
-                        if (AssistsCore.back()) {
-                            LogWrapper.logAppend("返回第 ${attempt + 1} 次")
-                        }
-                        delay(2000)
-                        val wechatNode = AssistsCore.getAllNodes().find {
-                            it.className == "android.widget.TextView"
-                                    && it.viewIdResourceName == "android:id/text1"
-                                    && it.text?.toString() == "微信"
-                        }
-                        if (wechatNode != null) {
-                            LogWrapper.logAppend("到了微信主页面。")
-                            return@next Step.get(StepTag.STEP_2, delay = 3000)
-                        }
+                    if (checkBackToWechatMain()) {
+                        return@next Step.get(StepTag.STEP_2, delay = 3000)
                     }
                     LogWrapper.logAppend("没有到微信主页面。")
                     return@next Step.get(StepTag.STEP_100, delay = 3000)
@@ -655,20 +675,8 @@ class Forward : StepImpl() {
                 } else {
                     LogWrapper.logAppend("消息内容不包含jd.com链接，跳过处理")
                 }
-                repeat(5) { attempt ->
-                    if (AssistsCore.back()) {
-                        LogWrapper.logAppend("返回第 ${attempt + 1} 次")
-                    }
-                    delay(2000)
-                    val wechatNode = AssistsCore.getAllNodes().find {
-                        it.className == "android.widget.TextView"
-                                && it.viewIdResourceName == "android:id/text1"
-                                && it.text?.toString() == "微信"
-                    }
-                    if (wechatNode != null) {
-                        LogWrapper.logAppend("到了微信主页面。")
-                        return@next Step.get(StepTag.STEP_17, delay = 3000)
-                    }
+                if (checkBackToWechatMain()) {
+                    return@next Step.get(StepTag.STEP_17, delay = 3000)
                 }
                 return@next Step.get(StepTag.STEP_17, delay = 2000)
             } else {
@@ -766,7 +774,7 @@ class Forward : StepImpl() {
             delay(3000)
             LogWrapper.logAppend("双击右下角，展开消息全屏，开始分享")
             AssistsCore.gestureClick(800f, 2040f)
-            delay(30)
+            delay(50)
             AssistsCore.gestureClick(800f, 2040f)
             delay(5000)
 
@@ -811,20 +819,8 @@ class Forward : StepImpl() {
             }
 
             // 2. 如果没找到顶部微信，尝试多次返回
-            repeat(10) { attempt ->
-                if (AssistsCore.back()) {
-                    LogWrapper.logAppend("返回第 ${attempt + 1} 次")
-                }
-                Thread.sleep(2000)
-                val wechatNode = AssistsCore.getAllNodes().find {
-                    it.className == "android.widget.TextView"
-                            && it.viewIdResourceName == "android:id/text1"
-                            && it.text?.toString() == "微信"
-                }
-                if (wechatNode != null) {
-                    LogWrapper.logAppend("到了微信主页面")
-                    return@next Step.get(StepTag.STEP_2, delay = 2000)
-                }
+            if (checkBackToWechatMain(10)) {
+                return@next Step.get(StepTag.STEP_2, delay = 2000)
             }
 
             LogWrapper.logAppend("未能返回微信主页面，重新启动微信")
