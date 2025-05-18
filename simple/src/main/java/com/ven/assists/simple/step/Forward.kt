@@ -46,6 +46,23 @@ class Forward : StepImpl() {
         }
     }
 
+    // 处理阿汤哥的文字
+    private fun processAtangText(text: String): String {
+        // 替换 .cn 为指定字符串
+        return text.replace(".cn", "FKD4RaByh_7pz")
+    }
+
+    // 处理京粉的文字
+    private fun processJingfenText(text: String): String {
+        // 只处理包含 jd.com 的消息
+        // 如果包含指定字符串，替换回.cn
+        var content = text.replace("FKD4RaByh_7pz", ".cn")
+        if (!content.contains("jd.com")) {
+            return ""
+        }
+        return content + "\n\n\n防失联，关注服务号：小小阿土哥"
+    }
+
     /**
      * 判断当前是否在微信主页面
      * @return 是否在微信主页面
@@ -799,22 +816,5 @@ class Forward : StepImpl() {
             LogWrapper.logAppend("未能返回微信主页面，重新启动微信")
             return@next Step.get(StepTag.STEP_1, delay = 2000)
         }
-    }
-
-    // 处理阿汤哥的文字
-    private fun processAtangText(text: String): String {
-        // 替换 .cn 为指定字符串
-        return text.replace(".cn", "FKD4RaByh_7pz")
-    }
-
-    // 处理京粉的文字
-    private fun processJingfenText(text: String): String {
-        // 只处理包含 jd.com 的消息
-        // 如果包含指定字符串，替换回.cn
-        var content = text.replace("FKD4RaByh_7pz", ".cn")
-        if (!content.contains("jd.com")) {
-            return ""
-        }
-        return content + "\n\n\n防失联，关注服务号：小小阿土哥"
     }
 }
