@@ -46,13 +46,21 @@ class Forward : StepImpl() {
         }
     }
 
-    // 处理阿汤哥的文字
+    /**
+     * 处理阿汤哥的文字
+     * @param text 原始文字
+     * @return 处理后的文字
+     */
     private fun processAtangText(text: String): String {
         // 替换 .cn 为指定字符串
         return text.replace(".cn", "FKD4RaByh_7pz")
     }
 
-    // 处理京粉的文字
+    /**
+     * 处理京粉的文字
+     * @param text 原始文字
+     * @return 处理后的文字
+     */
     private fun processJingfenText(text: String): String {
         // 只处理包含 jd.com 的消息
         // 如果包含指定字符串，替换回.cn
