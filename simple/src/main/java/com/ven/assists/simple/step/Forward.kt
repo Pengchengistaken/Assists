@@ -2,7 +2,6 @@ package com.ven.assists.simple.step
 
 import android.content.ComponentName
 import android.content.Intent
-import com.blankj.utilcode.util.ScreenUtils
 import com.ven.assists.AssistsCore
 import com.ven.assists.AssistsCore.click
 import com.ven.assists.AssistsCore.findFirstParentClickable
@@ -17,7 +16,6 @@ import com.ven.assists.simple.overlays.OverlayLog
 import com.ven.assists.stepper.Step
 import com.ven.assists.stepper.StepCollector
 import com.ven.assists.stepper.StepImpl
-import com.ven.assists.window.AssistsWindowManager
 import kotlinx.coroutines.delay
 
 /**
