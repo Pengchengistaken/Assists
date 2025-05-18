@@ -147,7 +147,7 @@ class Forward : StepImpl() {
                 component = ComponentName("com.tencent.mm", "com.tencent.mm.ui.LauncherUI")
                 AssistsService.instance?.startActivity(this)
             }
-            return@next Step.get(StepTag.STEP_2)
+            return@next Step.get(StepTag.STEP_2, delay = 2000)
         }
 
         //2. 点击聊天列表中的京东线报交流群
@@ -184,7 +184,7 @@ class Forward : StepImpl() {
                 if (DEBUG == true && kbqNode != null) { //调试：不需要小红点
                     kbqNode.findFirstParentClickable()?.click()
                     LogWrapper.logAppend("已找到并点击京东线报交流群")
-                    return@next Step.get(StepTag.STEP_3)
+                    return@next Step.get(StepTag.STEP_3, delay = 2000)
                 } else if (hasAh && kbqNode != null) {
                     LogWrapper.logAppend("京东线报交流群有新消息，2分钟后点击并进入执行。")
                     delay(120_000)
