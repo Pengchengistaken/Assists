@@ -22,7 +22,6 @@ import com.ven.assists.AssistsCore.logNode
 import com.ven.assists.service.AssistsService
 import com.ven.assists.service.AssistsServiceListener
 import com.ven.assists.simple.databinding.ActivityMainBinding
-import com.ven.assists.simple.overlays.OverlayAdvanced
 import com.ven.assists.simple.overlays.OverlayBasic
 import com.ven.assists.simple.overlays.OverlayLog
 import com.ven.assists.simple.overlays.OverlayPro
@@ -31,8 +30,8 @@ import com.ven.assists.simple.step.Forward
 import com.ven.assists.simple.step.StepTag
 import com.ven.assists.stepper.StepManager
 import com.ven.assists.utils.CoroutineWrapper
-import com.ven.assists.utils.NodeClassValue
 import kotlinx.coroutines.delay
+import androidx.core.net.toUri
 
 
 class MainActivity : AppCompatActivity(), AssistsServiceListener {
@@ -149,7 +148,7 @@ class MainActivity : AppCompatActivity(), AssistsServiceListener {
     }
 
     private fun checkPermission() {
-        val areNotificationsEnabled = NotificationManagerCompat.from(this).areNotificationsEnabled();
+        val areNotificationsEnabled = NotificationManagerCompat.from(this).areNotificationsEnabled()
         if (!areNotificationsEnabled) {
             // 通知权限未开启，提示用户去设置
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -178,7 +177,7 @@ class MainActivity : AppCompatActivity(), AssistsServiceListener {
             } else {
                 // Android 8.0以下版本，跳转到应用详情页面
                 intent.setAction(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
-                intent.setData(Uri.parse("package:" + getPackageName()))
+                intent.setData(("package:" + getPackageName()).toUri())
             }
             startActivity(intent)
         }.show()
