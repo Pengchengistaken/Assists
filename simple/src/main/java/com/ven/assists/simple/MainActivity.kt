@@ -140,6 +140,8 @@ class MainActivity : AppCompatActivity(), AssistsServiceListener {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // 设置屏幕常亮
+        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         BarUtils.setStatusBarLightMode(this, true)
         setContentView(viewBind.root)
         AssistsService.listeners.add(this)
