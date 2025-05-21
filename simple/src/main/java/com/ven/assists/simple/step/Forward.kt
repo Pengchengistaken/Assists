@@ -62,6 +62,11 @@ class Forward : StepImpl() {
     private fun checkMessageTime(currentTime: String?): Boolean {
         LogWrapper.logAppend("当前消息时间: $currentTime，历史时间: $lastMessageTime")
         if (currentTime == lastMessageTime) {
+            if (currentTime == null) {
+                LogWrapper.logAppend("当前消息时间为 null，可能是界面没有时间的节点信息。")
+                LogWrapper.logAppend("当做是新消息来处理。")
+                return true
+            }
             LogWrapper.logAppend("消息时间未变化，无需转发")
             return false
         }
