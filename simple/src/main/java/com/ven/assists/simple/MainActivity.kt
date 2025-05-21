@@ -6,7 +6,6 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.view.KeyEvent
-import android.view.View
 import android.view.accessibility.AccessibilityEvent
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.NotificationManagerCompat
@@ -115,15 +114,6 @@ class MainActivity : AppCompatActivity(), AssistsServiceListener {
         AssistsCore.getAllNodes().forEach { it.logNode() }
         if (AssistsCore.getPackageName() != AppUtils.getAppPackageName()) {
             CoroutineWrapper.launch { AssistsCore.launchApp(AppUtils.getAppPackageName()) }
-        }
-    }
-
-    private fun onBackApp() {
-        CoroutineWrapper.launch {
-            while (AssistsCore.getPackageName() != packageName) {
-                AssistsCore.back()
-                delay(500)
-            }
         }
     }
 
