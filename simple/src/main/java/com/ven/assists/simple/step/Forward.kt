@@ -70,7 +70,9 @@ class Forward : StepImpl() {
             LogWrapper.logAppend("消息时间未变化，无需转发")
             return false
         }
-        lastMessageTime = currentTime
+        if (currentTime != null) {
+            lastMessageTime = currentTime
+        }
         LogWrapper.logAppend("消息时间已变化")
         return true
     }
