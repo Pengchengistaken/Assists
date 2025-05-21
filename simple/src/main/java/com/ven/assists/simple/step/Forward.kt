@@ -160,7 +160,19 @@ class Forward : StepImpl() {
         //2. 点击聊天列表中的京东线报交流群
         collector.next(StepTag.STEP_2) { step ->
             setLastStep(StepTag.STEP_2)
-            LogWrapper.logAppend("STEP_2: 开始执行 - 查找并点击京东线报交流群")
+            LogWrapper.logAppend("STEP_2: 开始执行 - 查找并点击京东线报交流群。")
+
+            // 先判断是否在微信主页面
+            if (!isWechatMainPage()) {
+                LogWrapper.logAppend("当前不在微信主页面，尝试返回主页面。")
+                if (checkBackToWechatMain()) {
+                    LogWrapper.logAppend("已在微信主页面。")
+                } else {
+                    LogWrapper.logAppend("未能返回微信主页面，重新启动微信。")
+                    return@next Step.get(StepTag.STEP_1, delay = 2000)
+                }
+            }
+
             // 双击底部Tab"微信"
             val tabNodes = AssistsCore.findByText("微信")
             val screenHeight = com.blankj.utilcode.util.ScreenUtils.getScreenHeight()
