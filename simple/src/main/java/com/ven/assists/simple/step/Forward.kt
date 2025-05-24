@@ -200,7 +200,8 @@ class Forward : StepImpl() {
                 val kbqNode = allDescendants.find {
                     it.viewIdResourceName == "com.tencent.mm:id/kbq" && (it.text?.contains("京东线报交流群") == true)
                 }
-                if (DEBUG == true && kbqNode != null) { //调试：不需要小红点
+                if (DEBUG && kbqNode != null) { //调试：不需要小红点
+                    LogWrapper.logAppend("DEBUG 模式，跳过小红点")
                     kbqNode.findFirstParentClickable()?.click()
                     LogWrapper.logAppend("已找到并点击京东线报交流群")
                     return@next Step.get(StepTag.STEP_3, delay = 2000)
@@ -210,6 +211,10 @@ class Forward : StepImpl() {
                     kbqNode.findFirstParentClickable()?.click()
                     return@next Step.get(StepTag.STEP_3)
                 }
+            }
+            if (DEBUG) {
+                LogWrapper.logAppend("DEBUG 模式，5秒钟后再检查。")
+                return@next Step.get(StepTag.STEP_2, delay = 5000)
             }
             LogWrapper.logAppend("群里没有新消息, 一分钟后再检查。")
             return@next Step.get(StepTag.STEP_2, delay = 60_000)
@@ -269,7 +274,7 @@ class Forward : StepImpl() {
             }
 
             // 3. 检查时间戳是否发生变化
-            if (!checkMessageTime(currentMessageTime)) {
+            if (!DEBUG && !checkMessageTime(currentMessageTime)) {
                 LogWrapper.logAppend("消息时间未变化，无需转发。")
                 if (checkBackToWechatMain()) {
                     LogWrapper.logAppend("返回微信主页面，30秒后重试。")
@@ -373,14 +378,16 @@ class Forward : StepImpl() {
                 delay(2000)
                 multiSelectNode.click()
                 LogWrapper.logAppend("已点击多选按钮")
-                if (DEBUG == true) {
+                if (DEBUG) {
+                    LogWrapper.logAppend("DEBUG 模式，跳转到STEP_71")
                     return@next Step.get(StepTag.STEP_71, delay = 2000)
                 } else {
                     return@next Step.get(StepTag.STEP_72, delay = 2000)
                 }
             } else {
                 LogWrapper.logAppend("未找到多选按钮，重试")
-                return@next Step.get(StepTag.STEP_6, delay = 2000)
+                AssistsCore.back() //返回到聊天窗口
+                return@next Step.get(StepTag.STEP_3, delay = 2000)
             }
         }
 
@@ -549,6 +556,12 @@ class Forward : StepImpl() {
                         latestMsgIndex = i
                     }
                 }
+            }
+
+            // debug
+            if (DEBUG) {
+                LogWrapper.logAppend("DEBUG模式，设置 lastTextMsg 为 null")
+                lastTextMsg = null
             }
 
             // 判断是否需要back
