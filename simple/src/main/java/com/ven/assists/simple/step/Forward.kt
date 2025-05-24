@@ -33,7 +33,7 @@ class Forward : StepImpl() {
         private var lastMessageTime: String? = null // 记录上一条消息的时间
         private var retryCount: Int = 0 // 记录重试次数
         private var currentGroupIndex: Int = 0 // 当前处理的群组索引
-        private val targetGroups = mutableListOf(
+        private val targetGroups = mutableSetOf(
             "文件传输助手"
         )
 
@@ -59,6 +59,57 @@ class Forward : StepImpl() {
 
         private fun resetGroupIndex() {
             currentGroupIndex = 0
+        }
+    }
+
+    /**
+     * 查找指定 ID 和文本的 TextView 节点
+     */
+    private fun findTextViewByIdAndText(viewId: String, text: String): android.view.accessibility.AccessibilityNodeInfo? {
+        return AssistsCore.getAllNodes().find {
+            it.className == "android.widget.TextView" &&
+            it.viewIdResourceName == viewId &&
+            it.text?.toString() == text
+        }
+    }
+
+    /**
+     * 查找指定 ID 的 TextView 节点
+     */
+    private fun findTextViewById(viewId: String): android.view.accessibility.AccessibilityNodeInfo? {
+        return AssistsCore.getAllNodes().find {
+            it.className == "android.widget.TextView" &&
+            it.viewIdResourceName == viewId
+        }
+    }
+
+    /**
+     * 查找指定 ID 的 TextView 节点列表
+     */
+    private fun findAllTextViewById(viewId: String): List<android.view.accessibility.AccessibilityNodeInfo> {
+        return AssistsCore.getAllNodes().filter {
+            it.className == "android.widget.TextView" &&
+            it.viewIdResourceName == viewId
+        }
+    }
+
+    /**
+     * 查找指定 ID 的 LinearLayout 节点
+     */
+    private fun findLinearLayoutById(viewId: String): android.view.accessibility.AccessibilityNodeInfo? {
+        return AssistsCore.getAllNodes().find {
+            it.className == "android.widget.LinearLayout" &&
+            it.viewIdResourceName == viewId
+        }
+    }
+
+    /**
+     * 查找指定 ID 的 ListView 节点
+     */
+    private fun findListViewById(viewId: String): android.view.accessibility.AccessibilityNodeInfo? {
+        return AssistsCore.getAllNodes().find {
+            it.className == "android.widget.ListView" &&
+            it.viewIdResourceName == viewId
         }
     }
 
@@ -117,29 +168,16 @@ class Forward : StepImpl() {
     private fun isWechatMainPage(): Boolean {
         val nodes = AssistsCore.getAllNodes()
         // 检查是否在通讯录页面
-        val isInContactPage = nodes.any {
-            it.className == "android.widget.TextView" &&
-            it.viewIdResourceName == "com.tencent.mm:id/icon_tv" &&
-            it.text?.toString() == "通讯录"
-        }
+        val isInContactPage = findTextViewByIdAndText("com.tencent.mm:id/icon_tv", "通讯录") != null
         
         if (isInContactPage) {
             // 如果在通讯录页面，点击微信切换到主页面
-            val wechatTab = nodes.find {
-                it.className == "android.widget.TextView" &&
-                it.viewIdResourceName == "com.tencent.mm:id/icon_tv" &&
-                it.text?.toString() == "微信"
-            }
+            val wechatTab = findTextViewByIdAndText("com.tencent.mm:id/icon_tv", "微信")
             wechatTab?.findFirstParentClickable()?.click()
-//            delay(1000) // 等待切换完成
         }
         
         // 检查是否在微信主页面
-        return nodes.any {
-            it.className == "android.widget.TextView" &&
-            it.viewIdResourceName == "android:id/text1" &&
-            it.text?.toString() == "微信"
-        }
+        return findTextViewByIdAndText("android:id/text1", "微信") != null
     }
 
     /**
@@ -191,11 +229,7 @@ class Forward : StepImpl() {
             LogWrapper.logAppend("STEP_1001: 开始执行 - 获取联系人列表")
             
             // 1. 点击通讯录
-            val contactTab = AssistsCore.getAllNodes().find {
-                it.className == "android.widget.TextView"
-                        && it.text?.toString() == "通讯录"
-                        && it.viewIdResourceName == "com.tencent.mm:id/icon_tv"
-            }
+            val contactTab = findTextViewByIdAndText("com.tencent.mm:id/icon_tv", "通讯录")
             
             if (contactTab != null) {
                 LogWrapper.logAppend("已找到通讯录按钮，2秒后点击")
@@ -213,11 +247,7 @@ class Forward : StepImpl() {
             setLastStep(StepTag.STEP_1002)
             LogWrapper.logAppend("STEP_1002: 开始执行 - 点击群聊")
             
-            val groupChat = AssistsCore.getAllNodes().find {
-                it.className == "android.widget.TextView"
-                        && it.text?.toString() == "群聊"
-                        && it.viewIdResourceName == "com.tencent.mm:id/n9"
-            }
+            val groupChat = findTextViewByIdAndText("com.tencent.mm:id/n9", "群聊")
             
             if (groupChat != null) {
                 LogWrapper.logAppend("已找到群聊按钮，2秒后点击")
@@ -235,11 +265,8 @@ class Forward : StepImpl() {
             setLastStep(StepTag.STEP_1003)
             LogWrapper.logAppend("STEP_1003: 开始执行 - 遍历群聊列表")
             
-            val groupNames = mutableListOf<String>()
-            val groupNodes = AssistsCore.getAllNodes().filter {
-                it.className == "android.widget.TextView"
-                        && it.viewIdResourceName == "com.tencent.mm:id/cg1"
-            }
+            val groupNames = mutableSetOf<String>()
+            val groupNodes = findAllTextViewById("com.tencent.mm:id/cg1")
             
             groupNodes.forEach { node ->
                 node.text?.toString()?.let { name ->
@@ -267,11 +294,7 @@ class Forward : StepImpl() {
             setLastStep(StepTag.STEP_1004)
             LogWrapper.logAppend("STEP_1004: 开始执行 - 点击标签")
             
-            val tagButton = AssistsCore.getAllNodes().find {
-                it.className == "android.widget.TextView"
-                        && it.text?.toString() == "标签"
-                        && it.viewIdResourceName == "com.tencent.mm:id/n9"
-            }
+            val tagButton = findTextViewByIdAndText("com.tencent.mm:id/n9", "标签")
             
             if (tagButton != null) {
                 LogWrapper.logAppend("已找到标签按钮，2秒后点击")
@@ -289,11 +312,7 @@ class Forward : StepImpl() {
             setLastStep(StepTag.STEP_1005)
             LogWrapper.logAppend("STEP_1005: 开始执行 - 点击转发")
             
-            val forwardButton = AssistsCore.getAllNodes().find {
-                it.className == "android.widget.TextView"
-                        && it.text?.toString() == "转发"
-                        && it.viewIdResourceName == "com.tencent.mm:id/hs8"
-            }
+            val forwardButton = findTextViewByIdAndText("com.tencent.mm:id/hs8", "转发")
             
             if (forwardButton != null) {
                 LogWrapper.logAppend("已找到转发按钮，2秒后点击")
@@ -311,14 +330,11 @@ class Forward : StepImpl() {
             setLastStep(StepTag.STEP_1006)
             LogWrapper.logAppend("STEP_1006: 开始执行 - 获取转发页面的联系人")
             
-            val contactNodes = AssistsCore.getAllNodes().filter {
-                it.className == "android.widget.TextView"
-                        && it.viewIdResourceName == "com.tencent.mm:id/kbq"
-            }
+            val contactNodes = findAllTextViewById("com.tencent.mm:id/kbq")
             
             contactNodes.forEach { node ->
                 node.text?.toString()?.let { name ->
-                    if (name.isNotEmpty() && !targetGroups.contains(name)) {
+                    if (name.isNotEmpty()) {
                         targetGroups.add(name)
                         LogWrapper.logAppend("添加联系人: $name")
                     }
@@ -615,7 +631,7 @@ class Forward : StepImpl() {
             }
 
             // 获取当前要选择的群组名称
-            val currentGroup = targetGroups[currentGroupIndex]
+            val currentGroup = targetGroups.elementAt(currentGroupIndex)
             LogWrapper.logAppend("正在选择群组: $currentGroup")
 
             // 查找目标群组节点
