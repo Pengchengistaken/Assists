@@ -855,7 +855,7 @@ class Forward : StepImpl() {
             delay(3000)
             LogWrapper.logAppend("双击右下角，展开消息全屏，开始分享")
             AssistsCore.gestureClick(800f, 2040f)
-            delay(50)
+            delay(40)
             AssistsCore.gestureClick(800f, 2040f)
             delay(5000)
 
