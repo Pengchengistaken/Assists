@@ -33,10 +33,8 @@ class Forward : StepImpl() {
         private var lastMessageTime: String? = null // 记录上一条消息的时间
         private var retryCount: Int = 0 // 记录重试次数
         private var currentGroupIndex: Int = 0 // 当前处理的群组索引
-        private val targetGroups = listOf(
-            "文件传输助手",
-            "京东优质线报8群",
-            "京东优质线报9群"
+        private val targetGroups = mutableListOf(
+            "文件传输助手"
         )
 
         private fun setLastStep(step: Int) {
@@ -117,7 +115,27 @@ class Forward : StepImpl() {
      * @return 是否在微信主页面
      */
     private fun isWechatMainPage(): Boolean {
-        return AssistsCore.getAllNodes().any {
+        val nodes = AssistsCore.getAllNodes()
+        // 检查是否在通讯录页面
+        val isInContactPage = nodes.any {
+            it.className == "android.widget.TextView" &&
+            it.viewIdResourceName == "com.tencent.mm:id/icon_tv" &&
+            it.text?.toString() == "通讯录"
+        }
+        
+        if (isInContactPage) {
+            // 如果在通讯录页面，点击微信切换到主页面
+            val wechatTab = nodes.find {
+                it.className == "android.widget.TextView" &&
+                it.viewIdResourceName == "com.tencent.mm:id/icon_tv" &&
+                it.text?.toString() == "微信"
+            }
+            wechatTab?.findFirstParentClickable()?.click()
+//            delay(1000) // 等待切换完成
+        }
+        
+        // 检查是否在微信主页面
+        return nodes.any {
             it.className == "android.widget.TextView" &&
             it.viewIdResourceName == "android:id/text1" &&
             it.text?.toString() == "微信"
@@ -164,7 +182,157 @@ class Forward : StepImpl() {
                 component = ComponentName("com.tencent.mm", "com.tencent.mm.ui.LauncherUI")
                 AssistsService.instance?.startActivity(this)
             }
-            return@next Step.get(StepTag.STEP_2, delay = 2000)
+            return@next Step.get(StepTag.STEP_1001, delay = 2000)
+        }
+
+        //1001. 获取联系人列表
+        collector.next(StepTag.STEP_1001) { step ->
+            setLastStep(StepTag.STEP_1001)
+            LogWrapper.logAppend("STEP_1001: 开始执行 - 获取联系人列表")
+            
+            // 1. 点击通讯录
+            val contactTab = AssistsCore.getAllNodes().find {
+                it.className == "android.widget.TextView"
+                        && it.text?.toString() == "通讯录"
+                        && it.viewIdResourceName == "com.tencent.mm:id/icon_tv"
+            }
+            
+            if (contactTab != null) {
+                LogWrapper.logAppend("已找到通讯录按钮，2秒后点击")
+                delay(2000)
+                contactTab.findFirstParentClickable()?.click()
+                return@next Step.get(StepTag.STEP_1002, delay = 2000)
+            }
+            
+            LogWrapper.logAppend("未找到通讯录按钮，重试")
+            return@next Step.get(StepTag.STEP_1001, delay = 2000)
+        }
+
+        //1002. 点击群聊
+        collector.next(StepTag.STEP_1002) { step ->
+            setLastStep(StepTag.STEP_1002)
+            LogWrapper.logAppend("STEP_1002: 开始执行 - 点击群聊")
+            
+            val groupChat = AssistsCore.getAllNodes().find {
+                it.className == "android.widget.TextView"
+                        && it.text?.toString() == "群聊"
+                        && it.viewIdResourceName == "com.tencent.mm:id/n9"
+            }
+            
+            if (groupChat != null) {
+                LogWrapper.logAppend("已找到群聊按钮，2秒后点击")
+                delay(2000)
+                groupChat.findFirstParentClickable()?.click()
+                return@next Step.get(StepTag.STEP_1003, delay = 2000)
+            }
+            
+            LogWrapper.logAppend("未找到群聊按钮，重试")
+            return@next Step.get(StepTag.STEP_1002, delay = 2000)
+        }
+
+        //1003. 遍历群聊列表
+        collector.next(StepTag.STEP_1003) { step ->
+            setLastStep(StepTag.STEP_1003)
+            LogWrapper.logAppend("STEP_1003: 开始执行 - 遍历群聊列表")
+            
+            val groupNames = mutableListOf<String>()
+            val groupNodes = AssistsCore.getAllNodes().filter {
+                it.className == "android.widget.TextView"
+                        && it.viewIdResourceName == "com.tencent.mm:id/cg1"
+            }
+            
+            groupNodes.forEach { node ->
+                node.text?.toString()?.let { name ->
+                    if (name.isNotEmpty()) {
+                        groupNames.add(name)
+                        LogWrapper.logAppend("找到群聊: $name")
+                    }
+                }
+            }
+            
+            // 更新 targetGroups
+            if (groupNames.isNotEmpty()) {
+                targetGroups.clear()
+                targetGroups.addAll(groupNames)
+                LogWrapper.logAppend("已更新目标群组列表")
+            }
+            
+            // 返回上一页
+            AssistsCore.back()
+            return@next Step.get(StepTag.STEP_1004, delay = 2000)
+        }
+
+        //1004. 点击标签
+        collector.next(StepTag.STEP_1004) { step ->
+            setLastStep(StepTag.STEP_1004)
+            LogWrapper.logAppend("STEP_1004: 开始执行 - 点击标签")
+            
+            val tagButton = AssistsCore.getAllNodes().find {
+                it.className == "android.widget.TextView"
+                        && it.text?.toString() == "标签"
+                        && it.viewIdResourceName == "com.tencent.mm:id/n9"
+            }
+            
+            if (tagButton != null) {
+                LogWrapper.logAppend("已找到标签按钮，2秒后点击")
+                delay(2000)
+                tagButton.findFirstParentClickable()?.click()
+                return@next Step.get(StepTag.STEP_1005, delay = 2000)
+            }
+            
+            LogWrapper.logAppend("未找到标签按钮，重试")
+            return@next Step.get(StepTag.STEP_1004, delay = 2000)
+        }
+
+        //1005. 点击转发
+        collector.next(StepTag.STEP_1005) { step ->
+            setLastStep(StepTag.STEP_1005)
+            LogWrapper.logAppend("STEP_1005: 开始执行 - 点击转发")
+            
+            val forwardButton = AssistsCore.getAllNodes().find {
+                it.className == "android.widget.TextView"
+                        && it.text?.toString() == "转发"
+                        && it.viewIdResourceName == "com.tencent.mm:id/hs8"
+            }
+            
+            if (forwardButton != null) {
+                LogWrapper.logAppend("已找到转发按钮，2秒后点击")
+                delay(2000)
+                forwardButton.findFirstParentClickable()?.click()
+                return@next Step.get(StepTag.STEP_1006, delay = 2000)
+            }
+            
+            LogWrapper.logAppend("未找到转发按钮，重试")
+            return@next Step.get(StepTag.STEP_1005, delay = 2000)
+        }
+
+        //1006. 获取转发页面的联系人
+        collector.next(StepTag.STEP_1006) { step ->
+            setLastStep(StepTag.STEP_1006)
+            LogWrapper.logAppend("STEP_1006: 开始执行 - 获取转发页面的联系人")
+            
+            val contactNodes = AssistsCore.getAllNodes().filter {
+                it.className == "android.widget.TextView"
+                        && it.viewIdResourceName == "com.tencent.mm:id/kbq"
+            }
+            
+            contactNodes.forEach { node ->
+                node.text?.toString()?.let { name ->
+                    if (name.isNotEmpty() && !targetGroups.contains(name)) {
+                        targetGroups.add(name)
+                        LogWrapper.logAppend("添加联系人: $name")
+                    }
+                }
+            }
+            
+            // 返回主页面
+            if (checkBackToWechatMain()) {
+                LogWrapper.logAppend("已返回微信主页面")
+                return@next Step.get(StepTag.STEP_2, delay = 2000)
+            }
+            
+            LogWrapper.logAppend("未能返回微信主页面，重试")
+            return@next Step.get(StepTag.STEP_1006, delay = 2000)
         }
 
         //2. 点击聊天列表中的京东线报交流群
@@ -184,18 +352,19 @@ class Forward : StepImpl() {
             }
 
             // 双击底部Tab"微信"
-            val tabNodes = AssistsCore.findByText("微信")
-            val screenHeight = com.blankj.utilcode.util.ScreenUtils.getScreenHeight()
-            tabNodes.forEach { node ->
-                val rect = node.getBoundsInScreen()
-                if (rect.top > screenHeight * 0.75) {
-                    node.findFirstParentClickable()?.let { parent ->
-                        parent.click()
-                        Thread.sleep(100)
-                        parent.click()
-                        LogWrapper.logAppend("已双击底部Tab微信")
-                        return@forEach
-                    }
+            val tabNodes = AssistsCore.getAllNodes().filter {
+                it.className == "android.widget.TextView"
+                        && it.viewIdResourceName == "com.tencent.mm:id/icon_tv"
+                        && it.text?.toString() == "微信"
+            }
+            
+            if (tabNodes.isNotEmpty()) {
+                val wechatTab = tabNodes.first()
+                wechatTab.findFirstParentClickable()?.let { parent ->
+                    parent.click()
+                    Thread.sleep(100)
+                    parent.click()
+                    LogWrapper.logAppend("已双击底部Tab微信")
                 }
             }
             // 查找所有聊天行（每一行的 LinearLayout，id=cj0）
@@ -409,9 +578,34 @@ class Forward : StepImpl() {
             LogWrapper.logAppend("STEP_7: 开始执行 - 选择目标群组")
             
             // 如果是 DEBUG 模式，只选择文件传输助手
-            if (DEBUG && currentGroupIndex > 0) {
+            if (DEBUG) {
                 LogWrapper.logAppend("DEBUG 模式，只选择文件传输助手")
-                return@next Step.get(StepTag.STEP_9, delay = 2000)
+                val fileTransferNode = AssistsCore.getAllNodes().find {
+                    it.className == "android.widget.TextView"
+                            && it.text?.toString() == "文件传输助手"
+                }
+                
+                if (fileTransferNode != null) {
+                    LogWrapper.logAppend("已找到文件传输助手，2秒后点击")
+                    delay(2000)
+                    fileTransferNode.findFirstParentClickable()?.click()
+                    LogWrapper.logAppend("已点击文件传输助手")
+                    return@next Step.get(StepTag.STEP_9, delay = 2000)
+                } else {
+                    LogWrapper.logAppend("未找到文件传输助手，尝试滚动列表")
+                    val listContainer = AssistsCore.getAllNodes().find {
+                        it.className == "android.widget.ListView" &&
+                                it.viewIdResourceName == "com.tencent.mm:id/i3y"
+                    }
+
+                    if (listContainer != null && listContainer.scrollForward()) {
+                        LogWrapper.logAppend("已滚动列表，重试选择文件传输助手")
+                        return@next Step.get(StepTag.STEP_7, delay = 2000)
+                    }
+                    
+                    LogWrapper.logAppend("无法找到文件传输助手，重试")
+                    return@next Step.get(StepTag.STEP_7, delay = 2000)
+                }
             }
 
             // 如果已经处理完所有群组，进入下一步

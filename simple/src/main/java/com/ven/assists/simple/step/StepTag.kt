@@ -22,6 +22,14 @@ object StepTag {
     const val STEP_8 = 8
     const val STEP_9 = 9
 
+    const val STEP_1001 = 1001
+    const val STEP_1002 = 1002
+    const val STEP_1003 = 1003
+    const val STEP_1004 = 1004
+    const val STEP_1005 = 1005
+    const val STEP_1006 = 1006
+    const val STEP_1007 = 1007
+
     /** */
     const val STEP_10 = 10
     const val STEP_11 = 11
