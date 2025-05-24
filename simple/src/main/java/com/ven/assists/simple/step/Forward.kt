@@ -270,7 +270,10 @@ class Forward : StepImpl() {
 
             if (targetImageNode == null) {
                 LogWrapper.logAppend("未找到阿汤哥的图片消息，返回。")
-                AssistsCore.back()
+                if (checkBackToWechatMain()) {
+                    LogWrapper.logAppend("返回微信主页面，30秒后重试。")
+                    return@next Step.get(StepTag.STEP_2, delay = 30000)
+                }
             }
 
             // 3. 检查时间戳是否发生变化
