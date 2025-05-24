@@ -88,7 +88,7 @@ class Forward : StepImpl() {
     }
 
     /**
-     * 处理阿汤哥的文字
+     * 处理线报员的文字
      * @param text 原始文字
      * @return 处理后的文字
      */
@@ -208,7 +208,7 @@ class Forward : StepImpl() {
                 val allDescendants = row.getNodes() // 递归获取所有后代节点
                 val hasAh = allDescendants.any { it.viewIdResourceName == "com.tencent.mm:id/a_h" } // 小红点
                 val kbqNode = allDescendants.find {
-                    it.viewIdResourceName == "com.tencent.mm:id/kbq" && (it.text?.contains("京东线报交流群") == true) // 群名
+                    it.viewIdResourceName == "com.tencent.mm:id/kbq" && (it.text?.contains(ContactList.sourceGroupName) == true) // 群名
                 }
                 val ht5Node = allDescendants.find {
                     it.viewIdResourceName == "com.tencent.mm:id/ht5" && (it.text?.contains("关注的人") == true) // 关注的人
@@ -245,7 +245,7 @@ class Forward : StepImpl() {
                 it.className == "android.widget.RelativeLayout" && it.viewIdResourceName == "com.tencent.mm:id/bn1"
             }
 
-            // 2. 查找阿汤哥发送的最新图片消息
+            // 2. 查找线报员发送的最新图片消息
             var targetImageNode: android.view.accessibility.AccessibilityNodeInfo? = null
             var currentImageBounds: String? = null
             var currentMessageTime: String? = null
@@ -253,15 +253,15 @@ class Forward : StepImpl() {
             // 倒序遍历，优先取最新
             for (msgBlock in allMsgBlocks.reversed()) {
                 // 查找发送者节点
-                LogWrapper.logAppend("查找阿汤哥的图片消息")
+                LogWrapper.logAppend("查找线报员的图片消息")
                 val senderNode = msgBlock.getNodes().find {
                     it.className == "android.widget.TextView"
                             && it.viewIdResourceName == "com.tencent.mm:id/brc"
                             && it.text?.toString()
-                        ?.contains("阿汤哥会爆单吗＠自在极意京粉线报") == true
+                        ?.contains(ContactList.sourceRobotName) == true
                 }
 
-                // 如果找到阿汤哥的消息，再查找图片节点和时间节点
+                // 如果找到线报员的消息，再查找图片节点和时间节点
                 if (senderNode != null) {
                     // 查找时间节点
                     val timeNode = msgBlock.getNodes().find {
@@ -282,7 +282,7 @@ class Forward : StepImpl() {
             }
 
             if (targetImageNode == null) {
-                LogWrapper.logAppend("未找到阿汤哥的图片消息，返回。")
+                LogWrapper.logAppend("未找到线报员的图片消息，返回。")
                 if (checkBackToWechatMain()) {
                     LogWrapper.logAppend("返回微信主页面，30秒后重试。")
                     return@next Step.get(StepTag.STEP_2, delay = 30000)
@@ -518,10 +518,10 @@ class Forward : StepImpl() {
             }
         }
 
-        // 11. 查找"阿汤哥会爆单吗@自在极意京粉线报"发送的最新一条文字消息，并log输出
+        // 11. 查找线报员发送的最新一条文字消息，并log输出
         collector.next(StepTag.STEP_11) { step ->
             setLastStep(StepTag.STEP_11)
-            LogWrapper.logAppend("STEP_11: 开始执行 - 查找阿汤哥最新文字消息")
+            LogWrapper.logAppend("STEP_11: 开始执行 - 查找线报员最新文字消息")
             val allMsgBlocks = AssistsCore.getAllNodes().filter {
                 it.className == "android.widget.RelativeLayout" && it.viewIdResourceName == "com.tencent.mm:id/bn1"
             }
@@ -538,7 +538,7 @@ class Forward : StepImpl() {
                     it.className == "android.widget.TextView"
                             && it.viewIdResourceName == "com.tencent.mm:id/brc"
                             && it.text?.toString()
-                        ?.contains("阿汤哥会爆单吗＠自在极意京粉线报") == true
+                        ?.contains(ContactList.sourceRobotName) == true
                 }
 
                 // 2. 查找图片节点
@@ -549,7 +549,7 @@ class Forward : StepImpl() {
                     latestImageIndex = i
                 }
 
-                // 3. 如果找到阿汤哥的消息，再查找文字内容节点
+                // 3. 如果找到线报员的消息，再查找文字内容节点
                 if (senderNode != null) {
                     val contentNode = msgBlock.getNodes().find {
                         it.className == "android.widget.TextView"
