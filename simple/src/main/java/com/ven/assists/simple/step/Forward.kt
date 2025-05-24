@@ -32,6 +32,12 @@ class Forward : StepImpl() {
         private var ProcessedMsgText: String? = null // 记录全局内容
         private var lastMessageTime: String? = null // 记录上一条消息的时间
         private var retryCount: Int = 0 // 记录重试次数
+        private var currentGroupIndex: Int = 0 // 当前处理的群组索引
+        private val targetGroups = listOf(
+            "文件传输助手",
+            "京东优质线报8群",
+            "京东优质线报9群"
+        )
 
         private fun setLastStep(step: Int) {
             lastStep = step
@@ -51,6 +57,10 @@ class Forward : StepImpl() {
 
         private fun incrementRetryCount(): Int {
             return ++retryCount
+        }
+
+        private fun resetGroupIndex() {
+            currentGroupIndex = 0
         }
     }
 
@@ -381,12 +391,8 @@ class Forward : StepImpl() {
                 delay(2000)
                 multiSelectNode.click()
                 LogWrapper.logAppend("已点击多选按钮")
-                if (DEBUG) {
-                    LogWrapper.logAppend("DEBUG 模式，跳转到STEP_71")
-                    return@next Step.get(StepTag.STEP_71, delay = 2000)
-                } else {
-                    return@next Step.get(StepTag.STEP_72, delay = 2000)
-                }
+                resetGroupIndex() // 重置群组索引
+                return@next Step.get(StepTag.STEP_7, delay = 2000)
             } else {
                 LogWrapper.logAppend("未找到多选按钮，重试")
                 AssistsCore.back() //返回到聊天窗口
@@ -394,61 +400,55 @@ class Forward : StepImpl() {
             }
         }
 
-        collector.next(StepTag.STEP_71) { step ->
-            setLastStep(StepTag.STEP_71)
-            LogWrapper.logAppend("STEP_7_1: 开始执行 - 查找并点击文件传输助手")
-            val group8Node = AssistsCore.getAllNodes().find {
-                it.className == "android.widget.TextView"
-                        && it.text?.toString()?.contains("文件传输助手") == true
-            }
-            if (group8Node != null) {
-                LogWrapper.logAppend("已定位到文件传输助手，2秒后点击。")
-                delay(2000)
-                group8Node.findFirstParentClickable()?.click()
-                LogWrapper.logAppend("已点击文件传输助手")
+        //7. 选择目标群组
+        collector.next(StepTag.STEP_7) { step ->
+            setLastStep(StepTag.STEP_7)
+            LogWrapper.logAppend("STEP_7: 开始执行 - 选择目标群组")
+            
+            // 如果是 DEBUG 模式，只选择文件传输助手
+            if (DEBUG && currentGroupIndex > 0) {
+                LogWrapper.logAppend("DEBUG 模式，只选择文件传输助手")
                 return@next Step.get(StepTag.STEP_9, delay = 2000)
-            } else {
-                LogWrapper.logAppend("未找到文件传输助手，重试")
-                return@next Step.get(StepTag.STEP_71, delay = 2000)
             }
-        }
-        //7. 点击"京东优质线报8群"
-        collector.next(StepTag.STEP_72) { step ->
-            setLastStep(StepTag.STEP_72)
-            LogWrapper.logAppend("STEP_7_2: 开始执行 - 查找并点击京东优质线报8群")
-            val group8Node = AssistsCore.getAllNodes().find {
-                it.className == "android.widget.TextView"
-                        && it.text?.toString()?.contains("京东优质线报8群") == true
-            }
-            if (group8Node != null) {
-                LogWrapper.logAppend("已定位到京东优质线报8群，2秒后点击。")
-                delay(2000)
-                group8Node.findFirstParentClickable()?.click()
-                LogWrapper.logAppend("已点击京东优质线报8群")
-                return@next Step.get(StepTag.STEP_8, delay = 2000)
-            } else {
-                LogWrapper.logAppend("未找到京东优质线报8群，重试")
-                return@next Step.get(StepTag.STEP_72, delay = 2000)
-            }
-        }
 
-        //8. 点击"京东优质线报9群"
-        collector.next(StepTag.STEP_8) { step ->
-            setLastStep(StepTag.STEP_8)
-            LogWrapper.logAppend("STEP_8: 开始执行 - 查找并点击京东优质线报9群")
-            val group9Node = AssistsCore.getAllNodes().find {
-                it.className == "android.widget.TextView"
-                        && it.text?.toString()?.contains("京东优质线报9群") == true
-            }
-            if (group9Node != null) {
-                LogWrapper.logAppend("已定位到京东优质线报9群，2秒后点击。")
-                delay(2000)
-                group9Node.findFirstParentClickable()?.click()
-                LogWrapper.logAppend("已点击京东优质线报9群")
+            // 如果已经处理完所有群组，进入下一步
+            if (currentGroupIndex >= targetGroups.size) {
+                LogWrapper.logAppend("所有群组已选择完成")
                 return@next Step.get(StepTag.STEP_9, delay = 2000)
+            }
+
+            // 获取当前要选择的群组名称
+            val currentGroup = targetGroups[currentGroupIndex]
+            LogWrapper.logAppend("正在选择群组: $currentGroup")
+
+            // 查找目标群组节点
+            val groupNode = AssistsCore.getAllNodes().find {
+                it.className == "android.widget.TextView"
+                        && it.text?.toString()?.contains(currentGroup) == true
+            }
+
+            if (groupNode != null) {
+                LogWrapper.logAppend("已定位到群组 $currentGroup，2秒后点击。")
+                delay(2000)
+                groupNode.findFirstParentClickable()?.click()
+                LogWrapper.logAppend("已点击群组 $currentGroup")
+                currentGroupIndex++ // 移动到下一个群组
+                return@next Step.get(StepTag.STEP_7, delay = 2000)
             } else {
-                LogWrapper.logAppend("未找到京东优质线报9群，重试")
-                return@next Step.get(StepTag.STEP_8, delay = 2000)
+                LogWrapper.logAppend("未找到群组 $currentGroup，尝试滚动列表")
+                val listContainer = AssistsCore.getAllNodes().find {
+                    it.className == "android.widget.ListView" &&
+                            it.viewIdResourceName == "com.tencent.mm:id/i3y"
+                }
+
+                if (listContainer != null && listContainer.scrollForward()) {
+                    LogWrapper.logAppend("已滚动列表，重试选择群组")
+                    return@next Step.get(StepTag.STEP_7, delay = 2000)
+                }
+                
+                LogWrapper.logAppend("无法找到群组 $currentGroup，跳过")
+                currentGroupIndex++ // 移动到下一个群组
+                return@next Step.get(StepTag.STEP_7, delay = 2000)
             }
         }
 
