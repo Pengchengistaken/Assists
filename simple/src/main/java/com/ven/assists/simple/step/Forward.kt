@@ -206,17 +206,20 @@ class Forward : StepImpl() {
             // 遍历每一行，递归查找 a_h（小红点） 和 kbq（群名）
             for (row in allRows) {
                 val allDescendants = row.getNodes() // 递归获取所有后代节点
-                val hasAh = allDescendants.any { it.viewIdResourceName == "com.tencent.mm:id/a_h" }
+                val hasAh = allDescendants.any { it.viewIdResourceName == "com.tencent.mm:id/a_h" } // 小红点
                 val kbqNode = allDescendants.find {
-                    it.viewIdResourceName == "com.tencent.mm:id/kbq" && (it.text?.contains("京东线报交流群") == true)
+                    it.viewIdResourceName == "com.tencent.mm:id/kbq" && (it.text?.contains("京东线报交流群") == true) // 群名
+                }
+                val ht5Node = allDescendants.find {
+                    it.viewIdResourceName == "com.tencent.mm:id/ht5" && (it.text?.contains("关注的人") == true) // 关注的人
                 }
                 if (DEBUG && kbqNode != null) { //调试：不需要小红点
                     LogWrapper.logAppend("DEBUG 模式，跳过小红点")
                     kbqNode.findFirstParentClickable()?.click()
                     LogWrapper.logAppend("已找到并点击京东线报交流群")
                     return@next Step.get(StepTag.STEP_3, delay = 2000)
-                } else if (hasAh && kbqNode != null) {
-                    LogWrapper.logAppend("京东线报交流群有新消息，2分钟后点击并进入执行。")
+                } else if (hasAh && kbqNode != null && ht5Node != null) {
+                    LogWrapper.logAppend("京东线报交流群有新消息且包含关注的人，2分钟后点击并进入执行。")
                     delay(120_000)
                     kbqNode.findFirstParentClickable()?.click()
                     return@next Step.get(StepTag.STEP_3)
