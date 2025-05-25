@@ -29,6 +29,7 @@ import com.ven.assists.simple.step.StepTag
 import com.ven.assists.stepper.StepManager
 import com.ven.assists.utils.CoroutineWrapper
 import androidx.core.net.toUri
+import com.ven.assists.simple.step.ContactList
 
 
 class MainActivity : AppCompatActivity(), AssistsServiceListener {
@@ -60,8 +61,26 @@ class MainActivity : AppCompatActivity(), AssistsServiceListener {
                 }
             }
             btnAdvanced.setOnClickListener {
-                OverlayLog.show()
-                StepManager.execute(Forward::class.java, StepTag.STEP_1, begin = true)
+                // 第一个对话框：询问群名称
+                XPopup.Builder(this@MainActivity).asInputConfirm("设置监听群", "请输入要监听的群名称：", "") { groupName ->
+                    if (groupName.isNotEmpty()) {
+                        // 第二个对话框：询问用户名称
+                        XPopup.Builder(this@MainActivity).asInputConfirm("设置监听用户", "请输入要监听的微信用户名称：", "") { userName ->
+                            if (userName.isNotEmpty()) {
+                                // 设置新的监听群和用户
+                                ContactList.sourceGroupName = groupName
+                                ContactList.sourceRobotName = userName
+                                // 显示悬浮窗并开始执行
+                                OverlayLog.show()
+                                StepManager.execute(Forward::class.java, StepTag.STEP_1, begin = true)
+                            } else {
+                                XPopup.Builder(this@MainActivity).asConfirm("提示", "用户名称不能为空！", null).show()
+                            }
+                        }.show()
+                    } else {
+                        XPopup.Builder(this@MainActivity).asConfirm("提示", "群名称不能为空！", null).show()
+                    }
+                }.show()
             }
             btnWeb.setOnClickListener {
                 OverlayWeb.onClose = {
