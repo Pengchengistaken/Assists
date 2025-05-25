@@ -62,24 +62,18 @@ class MainActivity : AppCompatActivity(), AssistsServiceListener {
             }
             btnAdvanced.setOnClickListener {
                 // 第一个对话框：询问群名称
-                XPopup.Builder(this@MainActivity).asInputConfirm("设置监听群", "请输入要监听的群名称：", "") { groupName ->
-                    if (groupName.isNotEmpty()) {
-                        // 第二个对话框：询问用户名称
-                        XPopup.Builder(this@MainActivity).asInputConfirm("设置监听用户", "请输入要监听的微信用户名称：", "") { userName ->
-                            if (userName.isNotEmpty()) {
-                                // 设置新的监听群和用户
-                                ContactList.sourceGroupName = groupName
-                                ContactList.sourceRobotName = userName
-                                // 显示悬浮窗并开始执行
-                                OverlayLog.show()
-                                StepManager.execute(Forward::class.java, StepTag.STEP_1, begin = true)
-                            } else {
-                                XPopup.Builder(this@MainActivity).asConfirm("提示", "用户名称不能为空！", null).show()
-                            }
-                        }.show()
-                    } else {
-                        XPopup.Builder(this@MainActivity).asConfirm("提示", "群名称不能为空！", null).show()
-                    }
+                XPopup.Builder(this@MainActivity).asInputConfirm("设置监听群", "请输入要监听的群名称：", ContactList.sourceGroupName) { groupName ->
+                    val finalGroupName = groupName.ifEmpty { ContactList.sourceGroupName }
+                    // 第二个对话框：询问用户名称
+                    XPopup.Builder(this@MainActivity).asInputConfirm("设置监听用户", "请输入要监听的微信用户名称：", ContactList.sourceRobotName) { userName ->
+                        val finalUserName = userName.ifEmpty { ContactList.sourceRobotName }
+                        // 设置新的监听群和用户
+                        ContactList.sourceGroupName = finalGroupName
+                        ContactList.sourceRobotName = finalUserName
+                        // 显示悬浮窗并开始执行
+                        OverlayLog.show()
+                        StepManager.execute(Forward::class.java, StepTag.STEP_1, begin = true)
+                    }.show()
                 }.show()
             }
             btnWeb.setOnClickListener {
