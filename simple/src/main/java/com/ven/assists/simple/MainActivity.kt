@@ -61,20 +61,37 @@ class MainActivity : AppCompatActivity(), AssistsServiceListener {
                 }
             }
             btnAdvanced.setOnClickListener {
-                // 第一个对话框：询问群名称
-                XPopup.Builder(this@MainActivity).asInputConfirm("设置监听群", "请输入要监听的群名称：", ContactList.sourceGroupName) { groupName ->
-                    val finalGroupName = groupName.ifEmpty { ContactList.sourceGroupName }
-                    // 第二个对话框：询问用户名称
-                    XPopup.Builder(this@MainActivity).asInputConfirm("设置监听用户", "请输入要监听的微信用户名称：", ContactList.sourceRobotName) { userName ->
-                        val finalUserName = userName.ifEmpty { ContactList.sourceRobotName }
-                        // 设置新的监听群和用户
-                        ContactList.sourceGroupName = finalGroupName
-                        ContactList.sourceRobotName = finalUserName
-                        // 显示悬浮窗并开始执行
+                // 先询问是否需要修改设置
+                XPopup.Builder(this@MainActivity).asConfirm(
+                    "提示", 
+                    "是否要修改监听设置？\n\n当前监听群：\n${ContactList.sourceGroupName}\n\n当前监听用户：\n${ContactList.sourceRobotName}",
+                    {
+                        // 用户选择修改设置
+                        // 第一个对话框：询问群名称
+                        XPopup.Builder(this@MainActivity).asInputConfirm("设置监听群", "请输入要监听的群名称：", ContactList.sourceGroupName) { groupName ->
+                            val finalGroupName = groupName.ifEmpty { ContactList.sourceGroupName }
+                            // 第二个对话框：询问用户名称
+                            XPopup.Builder(this@MainActivity).asInputConfirm("设置监听用户", "请输入要监听的微信用户名称：", ContactList.sourceRobotName) { userName ->
+                                val finalUserName = userName.ifEmpty { ContactList.sourceRobotName }
+                                // 设置新的监听群和用户
+                                ContactList.sourceGroupName = finalGroupName
+                                ContactList.sourceRobotName = finalUserName
+                                // 保存设置
+                                ContactList.saveSettings(this@MainActivity)
+                                // 显示悬浮窗并开始执行
+                                OverlayLog.show()
+                                StepManager.execute(Forward::class.java, StepTag.STEP_1, begin = true)
+                            }.show()
+                        }.show()
+                    },
+                    {
+                        // 用户选择使用当前设置
                         OverlayLog.show()
                         StepManager.execute(Forward::class.java, StepTag.STEP_1, begin = true)
-                    }.show()
-                }.show()
+                    }
+                ).setConfirmText("修改设置")
+                .setCancelText("使用当前设置")
+                .show()
             }
             btnWeb.setOnClickListener {
                 OverlayWeb.onClose = {
@@ -141,6 +158,9 @@ class MainActivity : AppCompatActivity(), AssistsServiceListener {
         setContentView(viewBind.root)
         AssistsService.listeners.add(this)
         checkPermission()
+        
+        // 加载保存的设置
+        ContactList.loadSettings(this)
     }
 
     private fun checkPermission() {
