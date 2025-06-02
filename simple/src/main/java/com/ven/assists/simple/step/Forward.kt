@@ -1088,8 +1088,8 @@ class Forward : StepImpl() {
                 LogWrapper.logAppend("设置 ProcessedMsgText 为 null")
                 return@next Step.get(StepTag.STEP_6, delay = 2000)
             } else {
-                LogWrapper.logAppend("未找到分享按钮，尝试返回重试。")
-                AssistsCore.back()
+                LogWrapper.logAppend("未找到分享按钮，尝试点击 X 按钮。")
+                AssistsCore.gestureClick(50f, 155f)
                 return@next Step.get(StepTag.STEP_19, delay = 1000)
             }
         }
