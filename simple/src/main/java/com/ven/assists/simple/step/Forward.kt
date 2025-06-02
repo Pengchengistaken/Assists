@@ -8,6 +8,7 @@ import com.ven.assists.AssistsCore.findFirstParentClickable
 import com.ven.assists.AssistsCore.getBoundsInScreen
 import com.ven.assists.AssistsCore.getNodes
 import com.ven.assists.AssistsCore.longClick
+import com.ven.assists.AssistsCore.nodeGestureClickByDouble
 import com.ven.assists.AssistsCore.scrollForward
 import com.ven.assists.AssistsCore.setNodeText
 import com.ven.assists.service.AssistsService
@@ -1063,14 +1064,25 @@ class Forward : StepImpl() {
         collector.next(StepTag.STEP_19) { step ->
             setLastStep(StepTag.STEP_19)
             LogWrapper.logAppend("STEP_19: 开始执行 - 展开消息全屏并转发")
-            // 3. 双击消息
-            LogWrapper.logAppend("延迟 3 秒")
-            delay(3000)
-            LogWrapper.logAppend("双击右下角，展开消息全屏，开始分享")
-            AssistsCore.gestureClick(800f, 2040f)
-            delay(40)
-            AssistsCore.gestureClick(800f, 2040f)
-            delay(5000)
+             // 1. 获取所有 android.widget.TextView 节点
+            val allTextViews = AssistsCore.getAllNodes().filter {
+                it.className == "android.widget.TextView"
+            }
+            if (allTextViews.isEmpty()) {
+                LogWrapper.logAppend("未找到任何TextView，重试")
+                return@next Step.get(StepTag.STEP_19, delay = 2000)
+            }
+            // 2. 取最后一个TextView节点
+            val lastTextView = allTextViews.last()
+            if (lastTextView.isEnabled && lastTextView.isVisibleToUser) {
+                 if (lastTextView.nodeGestureClickByDouble()) {
+                    LogWrapper.logAppend("已双击TextView使得消息全屏")
+                }
+                delay(1500)
+            } else {
+                LogWrapper.logAppend("TextView不可点击，重试")
+                return@next Step.get(StepTag.STEP_19, delay = 2000)
+            }
 
             // 4. 查找并点击"分享"按钮
             val shareButton = AssistsCore.getAllNodes().find {
