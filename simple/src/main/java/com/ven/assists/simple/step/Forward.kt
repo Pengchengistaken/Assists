@@ -1064,7 +1064,19 @@ class Forward : StepImpl() {
         collector.next(StepTag.STEP_19) { step ->
             setLastStep(StepTag.STEP_19)
             LogWrapper.logAppend("STEP_19: 开始执行 - 展开消息全屏并转发")
-             // 1. 获取所有 android.widget.TextView 节点
+            // 增加重试计数
+            val maxRetry = 20
+            if (retryCount >= maxRetry) {
+                LogWrapper.logAppend("STEP_19重试超过${maxRetry}次，返回微信主页面并重置计数")
+                resetRetryCount()
+                if (checkBackToWechatMain()) {
+                    return@next Step.get(StepTag.STEP_2, delay = 2000)
+                } else {
+                    return@next Step.get(StepTag.STEP_1, delay = 2000)
+                }
+            }
+            retryCount++
+            // 1. 获取所有 android.widget.TextView 节点
             val allTextViews = AssistsCore.getAllNodes().filter {
                 it.className == "android.widget.TextView"
             }
@@ -1076,14 +1088,13 @@ class Forward : StepImpl() {
             delay(2000)
             val lastTextView = allTextViews.last()
             if (lastTextView.isEnabled && lastTextView.isVisibleToUser) {
-                 if (lastTextView.parent.parent.nodeGestureClickByDouble() == true) {
+                if (lastTextView.nodeGestureClickByDouble() == true) {
                     LogWrapper.logAppend("已双击TextView使得消息全屏")
                 }
             } else {
                 LogWrapper.logAppend("TextView不可点击，重试")
                 return@next Step.get(StepTag.STEP_19, delay = 2000)
             }
-
             // 4. 查找并点击"分享"按钮
             delay(3000)
             val shareButton = AssistsCore.getAllNodes().find {
@@ -1091,7 +1102,6 @@ class Forward : StepImpl() {
                         && it.contentDescription?.toString() == "分享"
                         && it.isClickable
             }
-
             if (shareButton != null) {
                 shareButton.click()
                 LogWrapper.logAppend("已点击分享按钮")
@@ -1099,9 +1109,10 @@ class Forward : StepImpl() {
                 LogWrapper.logAppend("设置 isLastMsgText 为 true")
                 ProcessedMsgText = null
                 LogWrapper.logAppend("设置 ProcessedMsgText 为 null")
+                resetRetryCount()
                 return@next Step.get(StepTag.STEP_6, delay = 2000)
             } else {
-                LogWrapper.logAppend("未找到分享按钮，尝试点击 X 按钮。")
+                LogWrapper.logAppend("未找到分享按钮，尝试点击 X 按钮的位置。")
                 AssistsCore.gestureClick(50f, 155f)
                 return@next Step.get(StepTag.STEP_19, delay = 1000)
             }
