@@ -14,6 +14,7 @@ import androidx.core.view.isInvisible
 import androidx.core.view.isVisible
 import androidx.core.view.setPadding
 import com.blankj.utilcode.util.LogUtils
+import com.blankj.utilcode.util.ScreenUtils
 import com.blankj.utilcode.util.SizeUtils
 import com.ven.assists.service.AssistsService
 import com.ven.assists.utils.CoroutineWrapper
@@ -65,8 +66,8 @@ object AssistsWindowManager {
                 or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
                 or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN)
 
-        layoutParams.height = WindowManager.LayoutParams.MATCH_PARENT
-        layoutParams.width = WindowManager.LayoutParams.MATCH_PARENT
+        layoutParams.height = ScreenUtils.getScreenHeight()
+        layoutParams.width = ScreenUtils.getScreenWidth()
         layoutParams.gravity = Gravity.START or Gravity.TOP
         layoutParams.format = PixelFormat.RGBA_8888
         //此处layoutParams.type不建议使用TYPE_TOAST，因为在一些版本较低的系统中会出现拖动异常的问题，虽然它不需要权限
@@ -176,6 +177,81 @@ object AssistsWindowManager {
             layoutParams.nonTouchableByLayoutParams()
         }
         viewList.add(ViewWrapper(view, layoutParams))
+    }
+
+    /**
+     * FLAG_NOT_FOCUSABLE
+     * 8
+     * 0x08
+     * 不获取焦点
+     * FLAG_NOT_TOUCHABLE
+     * 16
+     * 0x10
+     * 不响应触摸
+     * FLAG_NOT_TOUCH_MODAL
+     * 32
+     * 0x20
+     * 不拦截触摸
+     * FLAG_WATCH_OUTSIDE_TOUCH
+     * 4
+     * 0x04
+     * 监听窗外点击
+     * FLAG_LAYOUT_NO_LIMITS
+     * 512
+     * 0x200
+     * 可绘制超出屏幕
+     * FLAG_LAYOUT_IN_SCREEN
+     * 256
+     * 0x100
+     * 屏幕全区域布局
+     * FLAG_FULLSCREEN
+     * 1024
+     * 0x400
+     * 全屏显示
+     * FLAG_DIM_BEHIND
+     * 2
+     * 0x02
+     * 背景变暗
+     * FLAG_SECURE
+     * 8192
+     * 0x2000
+     * 防录屏防截图
+     * FLAG_KEEP_SCREEN_ON
+     * 128
+     * 0x80
+     * 保持常亮
+     * FLAG_SHOW_WHEN_LOCKED
+     * 524288
+     * 0x80000
+     * 锁屏时可见
+     * FLAG_DISMISS_KEYGUARD
+     * 4194304
+     * 0x400000
+     * 解锁屏幕
+     * FLAG_TURN_SCREEN_ON
+     * 2097152
+     * 0x200000
+     * 点亮屏幕
+     * FLAG_ALLOW_LOCK_WHILE_SCREEN_ON
+     * 128
+     * 0x80
+     * 自动锁屏（不常用）
+     * FLAG_SHOW_WALLPAPER
+     * 1048576
+     * 0x100000
+     * 显示墙纸
+     * FLAG_HARDWARE_ACCELERATED
+     * 16777216
+     * 0x1000000
+     * 强制硬件加速
+     *
+     */
+    suspend fun setFlags(flag: Int) {
+        withContext(Dispatchers.Main) {
+            viewList.forEach {
+                it.layoutParams.flags = flag
+            }
+        }
     }
 
     /**
@@ -319,6 +395,7 @@ object AssistsWindowManager {
                     text = this@overlayToast
                     setTextColor(Color.WHITE)
                     setPadding(SizeUtils.dp2px(10f))
+                    layoutParams= ViewGroup.LayoutParams(-2,-2)
                 }
                 val assistsWindowWrapper = AssistsWindowWrapper(textView, wmLayoutParams = createLayoutParams().apply {
                     width = -2

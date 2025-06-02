@@ -9,17 +9,22 @@
 6. 远程控制
 
 # Assists作用
+
 基于Android无障碍服务（AccessibilityService）封装的框架
+
 1. 简化自动化脚本开发
 2. 为自动化脚本提供各种增强能力
 3. 提高脚本易维护性
+4. 支持html+js/vue开发自动化脚本
 
 # 主要能力
+
 1. 易于使用的无障碍服务API
 2. 浮窗管理器：易于实现及管理浮窗
 3. 步骤器：为快速实现、可复用、易维护的自动化步骤提供框架及管理
 4. 配套屏幕管理：快速生成输出屏幕截图、元素截图
 5. 屏幕管理结合opencv：便于屏幕内容识别为自动化提供服务
+6. 封装webview接口支持html+js/vue开发自动化脚本
 
 # 功能示例：微信消息自动转发系统
 
@@ -57,7 +62,9 @@
 
 # 快速开始
 ### 1. 导入依赖
+
 #### 1.1 项目根目录build.gradle添加
+
 ```
 allprojects {
     repositories {
@@ -68,7 +75,9 @@ allprojects {
 ```
 
 #### 1.2 主模块build.gradle添加
+
 最新版本：[![](https://jitpack.io/v/ven-coder/Assists.svg)](https://jitpack.io/#ven-coder/Assists)
+
 ```
 dependencies {
     //按需添加
@@ -156,4 +165,5 @@ dependencies {
 3. 查找节点。
 
 # License
+
 [GNU General Public License v3.0](https://github.com/ven-coder/Assists/blob/master/LICENSE)
