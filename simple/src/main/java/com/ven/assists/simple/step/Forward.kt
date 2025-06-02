@@ -890,10 +890,7 @@ class Forward : StepImpl() {
             }
 
             if (editTextNode != null) {
-                LogWrapper.logAppend("已定位到输入框，2秒后点击。")
-                delay(2000)
-                editTextNode.click()
-                delay(1000)
+                LogWrapper.logAppend("已定位到输入框。")
 
                 if (!ProcessedMsgText.isNullOrBlank()) {
                     editTextNode.setNodeText(ProcessedMsgText)
