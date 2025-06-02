@@ -1073,18 +1073,19 @@ class Forward : StepImpl() {
                 return@next Step.get(StepTag.STEP_19, delay = 2000)
             }
             // 2. 取最后一个TextView节点
+            delay(2000)
             val lastTextView = allTextViews.last()
             if (lastTextView.isEnabled && lastTextView.isVisibleToUser) {
-                 if (lastTextView.nodeGestureClickByDouble()) {
+                 if (lastTextView.parent.parent.nodeGestureClickByDouble() == true) {
                     LogWrapper.logAppend("已双击TextView使得消息全屏")
                 }
-                delay(1500)
             } else {
                 LogWrapper.logAppend("TextView不可点击，重试")
                 return@next Step.get(StepTag.STEP_19, delay = 2000)
             }
 
             // 4. 查找并点击"分享"按钮
+            delay(3000)
             val shareButton = AssistsCore.getAllNodes().find {
                 it.className == "android.widget.ImageButton"
                         && it.contentDescription?.toString() == "分享"
