@@ -2,10 +2,12 @@ package com.ven.assists.simple
 
 import android.Manifest
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.view.KeyEvent
+import android.view.View
 import android.view.accessibility.AccessibilityEvent
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.NotificationManagerCompat
@@ -20,6 +22,7 @@ import com.ven.assists.AssistsCore.logNode
 import com.ven.assists.service.AssistsService
 import com.ven.assists.service.AssistsServiceListener
 import com.ven.assists.simple.databinding.ActivityMainBinding
+import com.ven.assists.simple.overlays.OverlayAdvanced
 import com.ven.assists.simple.overlays.OverlayBasic
 import com.ven.assists.simple.overlays.OverlayLog
 import com.ven.assists.simple.overlays.OverlayPro
@@ -28,6 +31,8 @@ import com.ven.assists.simple.step.Forward
 import com.ven.assists.simple.step.StepTag
 import com.ven.assists.stepper.StepManager
 import com.ven.assists.utils.CoroutineWrapper
+import com.ven.assists.utils.NodeClassValue
+import kotlinx.coroutines.delay
 import androidx.core.net.toUri
 import com.ven.assists.simple.step.ContactList
 
@@ -63,7 +68,7 @@ class MainActivity : AppCompatActivity(), AssistsServiceListener {
             btnAdvanced.setOnClickListener {
                 // 先询问是否需要修改设置
                 XPopup.Builder(this@MainActivity).asConfirm(
-                    "提示", 
+                    "提示",
                     "是否要修改监听设置？\n\n当前监听群：\n${ContactList.sourceGroupName}\n\n当前监听用户：\n${ContactList.sourceRobotName}",
                     {
                         // 用户选择修改设置
@@ -106,6 +111,14 @@ class MainActivity : AppCompatActivity(), AssistsServiceListener {
             }
         }
     }
+    private val foregroundServiceIntent: Intent by lazy {
+        Intent(this, ForegroundService::class.java)
+    }
+    private var disableNotificationView: View? = null
+
+
+    private lateinit var drawingView: MultiTouchDrawingView
+
 
     override fun onResume() {
         super.onResume()
@@ -121,9 +134,13 @@ class MainActivity : AppCompatActivity(), AssistsServiceListener {
     private fun checkServiceEnable() {
         if (!isActivityResumed) return
         if (AssistsCore.isAccessibilityServiceEnabled()) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(foregroundServiceIntent)
+            }
             viewBind.btnEnable.isVisible = false
             viewBind.llOption.isVisible = true
         } else {
+            stopService(foregroundServiceIntent)
             viewBind.btnEnable.isVisible = true
             viewBind.llOption.isVisible = false
         }
@@ -134,13 +151,10 @@ class MainActivity : AppCompatActivity(), AssistsServiceListener {
 //        if (event.eventType == AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED) {
 //
 //        }
-
     }
 
     override fun onServiceConnected(service: AssistsService) {
-//        onBackApp()
         checkServiceEnable()
-        AssistsCore.getAllNodes().forEach { it.logNode() }
         if (AssistsCore.getPackageName() != AppUtils.getAppPackageName()) {
             CoroutineWrapper.launch { AssistsCore.launchApp(AppUtils.getAppPackageName()) }
         }
@@ -158,7 +172,7 @@ class MainActivity : AppCompatActivity(), AssistsServiceListener {
         setContentView(viewBind.root)
         AssistsService.listeners.add(this)
         checkPermission()
-        
+
         // 加载保存的设置
         ContactList.loadSettings(this)
     }

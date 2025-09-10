@@ -16,6 +16,7 @@ import com.blankj.utilcode.util.TimeUtils
 import com.ven.assists.AssistsCore
 import com.ven.assists.AssistsCore.click
 import com.ven.assists.AssistsCore.longClick
+import com.ven.assists.AssistsCore.longPressGestureAutoPaste
 import com.ven.assists.AssistsCore.nodeGestureClick
 import com.ven.assists.AssistsCore.scrollBackward
 import com.ven.assists.AssistsCore.scrollForward
@@ -44,18 +45,11 @@ object OverlayBasic : AssistsServiceListener {
                     //点击
                     btnClick.setOnClickListener {
                         CoroutineWrapper.launch {
-//                            AssistsService.instance?.startActivity(Intent(AssistsService.instance, TestActivity::class.java).apply {
-//                                flags = Intent.FLAG_ACTIVITY_NEW_TASK
-//                            })
-//                            delay(1000)
-//                            AssistsCore.findById("com.ven.assists.demo:id/btn_test").firstOrNull()?.click()
-
-                            val file = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                                val bitmap = AssistsCore.takeScreenshot()
-                                LogUtils.d(bitmap)
-                            } else {
-                                TODO("VERSION.SDK_INT < R")
-                            }
+                            AssistsService.instance?.startActivity(Intent(AssistsService.instance, TestActivity::class.java).apply {
+                                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                            })
+                            delay(1000)
+                            AssistsCore.findById("com.ven.assists.demo:id/btn_test").firstOrNull()?.click()
                         }
 
                     }
@@ -247,6 +241,9 @@ object OverlayBasic : AssistsServiceListener {
                             "仅支持Android12及以上版本".overlayToast()
                         }
                     }
+                    btnToast.setOnClickListener {
+                        "这是浮窗级别Toast：${TimeUtils.getNowString()}".overlayToast(delay = 3000)
+                    }
                 }
             }
             return field
@@ -267,10 +264,14 @@ object OverlayBasic : AssistsServiceListener {
         get() {
             viewBinding?.let {
                 if (field == null) {
-                    field = AssistsWindowWrapper(it.root, wmLayoutParams = AssistsWindowManager.createLayoutParams().apply {
-                        width = (ScreenUtils.getScreenWidth() * 0.8).toInt()
-                        height = (ScreenUtils.getScreenHeight() * 0.5).toInt()
-                    }, onClose = this.onClose).apply {
+                    field = AssistsWindowWrapper(
+                        it.root,
+                        wmLayoutParams = AssistsWindowManager.createLayoutParams().apply {
+                            width = (ScreenUtils.getScreenWidth() * 0.8).toInt()
+                            height = (ScreenUtils.getScreenHeight() * 0.5).toInt()
+                        },
+                        onClose = this.onClose
+                    ).apply {
                         minWidth = (ScreenUtils.getScreenWidth() * 0.6).toInt()
                         minHeight = (ScreenUtils.getScreenHeight() * 0.4).toInt()
                         initialCenter = true

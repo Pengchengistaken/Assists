@@ -24,6 +24,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import java.util.Collections
+import java.util.UUID
 
 /**
  * 浮窗管理器
@@ -32,10 +33,14 @@ import java.util.Collections
 object AssistsWindowManager {
     /** 系统窗口管理器 */
     private lateinit var windowManager: WindowManager
+
     /** 显示度量信息 */
     private lateinit var mDisplayMetrics: DisplayMetrics
-    /** 浮窗视图列表，使用线程安全的集合 */
-    private val viewList = Collections.synchronizedList(arrayListOf<ViewWrapper>())
+
+    /**
+     * 浮窗视图列表，使用线程安全的集合
+     */
+    val viewList = Collections.synchronizedMap(mutableMapOf<String, ViewWrapper>())
 
     /**
      * 初始化窗口管理器
@@ -83,9 +88,12 @@ object AssistsWindowManager {
      * 隐藏所有浮窗
      * @param isTouchable 隐藏后是否可触摸，默认为true
      */
-    suspend fun hideAll(isTouchable: Boolean = true) {
+    suspend fun hideAll(isTouchable: Boolean = true, filterViews: List<View> = arrayListOf()) {
         withContext(Dispatchers.Main) {
-            viewList.forEach {
+            viewList.values.forEach {
+                if (filterViews.contains(it.view)) {
+                    return@forEach
+                }
                 it.view.isInvisible = true
                 if (isTouchable) {
                     it.touchableByWrapper()
@@ -102,12 +110,28 @@ object AssistsWindowManager {
      */
     suspend fun hideTop(isTouchable: Boolean = true) {
         withContext(Dispatchers.Main) {
-            viewList.lastOrNull()?.let {
+            viewList.values.lastOrNull()?.let {
                 it.view.isInvisible = true
                 if (isTouchable) {
                     it.touchableByWrapper()
                 } else {
                     it.nonTouchableByWrapper()
+                }
+            }
+        }
+    }
+
+    suspend fun hide(view: View?, isTouchable: Boolean = true) {
+        view ?: return
+        withContext(Dispatchers.Main) {
+            viewList.values.forEach {
+                if (view == it.view) {
+                    it.view.isInvisible = true
+                    if (isTouchable) {
+                        it.touchableByWrapper()
+                    } else {
+                        it.nonTouchableByWrapper()
+                    }
                 }
             }
         }
@@ -119,7 +143,7 @@ object AssistsWindowManager {
      */
     suspend fun showTop(isTouchable: Boolean = true) {
         withContext(Dispatchers.Main) {
-            viewList.lastOrNull()?.let {
+            viewList.values.lastOrNull()?.let {
                 it.view.isVisible = true
                 if (isTouchable) {
                     it.touchableByWrapper()
@@ -136,7 +160,7 @@ object AssistsWindowManager {
      */
     suspend fun showAll(isTouchable: Boolean = true) {
         withContext(Dispatchers.Main) {
-            viewList.forEach {
+            viewList.values.forEach {
                 it.view.isVisible = true
                 if (isTouchable) {
                     it.touchableByWrapper()
@@ -168,7 +192,7 @@ object AssistsWindowManager {
     fun add(view: View?, layoutParams: WindowManager.LayoutParams = createLayoutParams(), isStack: Boolean = true, isTouchable: Boolean = true) {
         view ?: return
         if (!isStack) {
-            viewList.lastOrNull()?.let { it.view.isInvisible = true }
+            viewList.values.lastOrNull()?.let { it.view.isInvisible = true }
         }
         windowManager.addView(view, layoutParams)
         if (isTouchable) {
@@ -176,7 +200,8 @@ object AssistsWindowManager {
         } else {
             layoutParams.nonTouchableByLayoutParams()
         }
-        viewList.add(ViewWrapper(view, layoutParams))
+        val wrapper = ViewWrapper(view, layoutParams)
+        viewList[wrapper.uniqueId] = wrapper
     }
 
     /**
@@ -248,8 +273,9 @@ object AssistsWindowManager {
      */
     suspend fun setFlags(flag: Int) {
         withContext(Dispatchers.Main) {
-            viewList.forEach {
+            viewList.values.forEach {
                 it.layoutParams.flags = flag
+                updateViewLayout(it.view, it.layoutParams)
             }
         }
     }
@@ -268,7 +294,7 @@ object AssistsWindowManager {
      * @param showTop 是否显示下一个浮窗，默认为true
      */
     suspend fun pop(showTop: Boolean = true) {
-        viewList.lastOrNull()?.let { removeView(it.view) }
+        viewList.values.lastOrNull()?.let { removeView(it.view) }
         if (showTop) showTop()
     }
 
@@ -276,15 +302,55 @@ object AssistsWindowManager {
      * 移除指定浮窗
      * @param view 要移除的视图
      */
+    @Deprecated("使用removeWindow")
     fun removeView(view: View?) {
         view ?: return
         try {
             windowManager.removeView(view)
-            viewList.find {
+            viewList.values.find {
                 return@find view == it.view
             }?.let {
-                viewList.remove(it)
+                viewList.remove(it.uniqueId)
             }
+
+            if (viewList.size == 1 && viewList.values.first().view == WindowMinimizeManager.viewBinding?.root) {
+                WindowMinimizeManager.hide()
+            }
+
+        } catch (e: Throwable) {
+            LogUtils.e(e)
+        }
+    }
+
+    /**
+     * 移除指定浮窗
+     * @param view 要移除的视图
+     */
+    fun removeWindow(view: View?) {
+        view ?: return
+        try {
+            windowManager.removeView(view)
+            viewList.values.find {
+                return@find view == it.view
+            }?.let {
+                viewList.remove(it.uniqueId)
+            }
+
+            if (viewList.size == 1 && viewList.values.first().view == WindowMinimizeManager.viewBinding?.root) {
+                WindowMinimizeManager.hide()
+            }
+
+        } catch (e: Throwable) {
+            LogUtils.e(e)
+        }
+    }
+
+    fun removeAllWindow() {
+        try {
+            viewList.forEach {
+                windowManager.removeView(it.value.view)
+            }
+            viewList.clear()
         } catch (e: Throwable) {
             LogUtils.e(e)
         }
@@ -297,7 +363,7 @@ object AssistsWindowManager {
      */
     fun contains(view: View?): Boolean {
         view ?: return false
-        return viewList.find {
+        return viewList.values.find {
             return@find view == it.view
         } != null
     }
@@ -309,7 +375,7 @@ object AssistsWindowManager {
      */
     fun contains(wrapper: AssistsWindowWrapper?): Boolean {
         wrapper ?: return false
-        return viewList.find {
+        return viewList.values.find {
             return@find wrapper.getView() == it.view
         } != null
     }
@@ -320,7 +386,7 @@ object AssistsWindowManager {
      * @return 是否可见
      */
     fun isVisible(view: View): Boolean {
-        return viewList.find {
+        return viewList.values.find {
             return@find view == it.view
         }?.let {
             return@let it.view.isVisible
@@ -332,7 +398,9 @@ object AssistsWindowManager {
      * @param view 要更新的视图
      * @param params 新的布局参数
      */
-    suspend fun updateViewLayout(view: View, params: ViewGroup.LayoutParams) {
+    suspend fun updateViewLayout(view: View?, params: ViewGroup.LayoutParams?) {
+        view ?: return
+        params ?: return
         runMain { windowManager.updateViewLayout(view, params) }
     }
 
@@ -340,15 +408,22 @@ object AssistsWindowManager {
      * 设置所有浮窗为可触摸状态
      */
     suspend fun touchableByAll() {
-        viewList.forEach { it.touchableByWrapper() }
+        viewList.values.forEach { it.touchableByWrapper() }
     }
 
     /**
      * 设置所有浮窗为不可触摸状态
      */
     suspend fun nonTouchableByAll() {
-        viewList.forEach { it.nonTouchableByWrapper() }
+        viewList.values.forEach { it.nonTouchableByWrapper() }
     }
+
+    fun WindowManager.LayoutParams.focusInput() {
+        flags = (WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH
+                or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+                or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN)
+    }
+
 
     /**
      * 设置布局参数为可触摸状态
@@ -395,7 +470,7 @@ object AssistsWindowManager {
                     text = this@overlayToast
                     setTextColor(Color.WHITE)
                     setPadding(SizeUtils.dp2px(10f))
-                    layoutParams= ViewGroup.LayoutParams(-2,-2)
+                    layoutParams = ViewGroup.LayoutParams(-2, -2)
                 }
                 val assistsWindowWrapper = AssistsWindowWrapper(textView, wmLayoutParams = createLayoutParams().apply {
                     width = -2
@@ -416,5 +491,5 @@ object AssistsWindowManager {
      * @param view 浮窗视图
      * @param layoutParams 布局参数
      */
-    class ViewWrapper(val view: View, val layoutParams: WindowManager.LayoutParams)
+    class ViewWrapper(val view: View, val layoutParams: WindowManager.LayoutParams, val uniqueId: String = UUID.randomUUID().toString())
 }

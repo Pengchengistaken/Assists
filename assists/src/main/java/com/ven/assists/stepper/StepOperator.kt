@@ -20,6 +20,7 @@ import kotlin.coroutines.cancellation.CancellationException
  * @property isRunCoroutineIO 是否在IO线程执行，默认为false（在主线程执行）
  * @property data 步骤执行时的附加数据
  */
+
 class StepOperator(
     val implClassName: String,
     val step: Int,
@@ -95,7 +96,7 @@ class StepOperator(
 
             Step.repeat -> {
                 repeatCount++
-                StepManager.execute(implClassName, step, delay = nextStep.delay, data = nextStep.data)
+                StepManager.execute(implClassName, step, delay = nextStep.delay, data = if (nextStep.data == null) data else nextStep.data)
             }
 
             else -> {

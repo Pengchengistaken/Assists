@@ -1,8 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     package="com.ven.assists_web">
 
-    <application>
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+
+    <application android:hardwareAccelerated="true">
         <provider
             android:name="com.ven.assists.web.CustomFileProvider"
             android:authorities="${applicationId}.assistsweb.fileprovider"
@@ -12,6 +16,11 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/assists_web_provider_paths" />
         </provider>
+
+        <activity
+            android:name="com.journeyapps.barcodescanner.CaptureActivity"
+            android:screenOrientation="portrait"
+            tools:replace="screenOrientation" />
 
     </application>
 
