@@ -2,6 +2,7 @@ package com.ven.assists.simple.step
 
 import android.content.ComponentName
 import android.content.Intent
+import android.util.Log
 import com.ven.assists.AssistsCore
 import com.ven.assists.AssistsCore.click
 import com.ven.assists.AssistsCore.findFirstParentClickable
@@ -13,6 +14,7 @@ import com.ven.assists.AssistsCore.scrollForward
 import com.ven.assists.AssistsCore.setNodeText
 import com.ven.assists.service.AssistsService
 import com.ven.assists.simple.common.LogWrapper
+import com.ven.assists.simple.constants.WechatResourceIds
 import com.ven.assists.simple.overlays.OverlayLog
 import com.ven.assists.stepper.Step
 import com.ven.assists.stepper.StepCollector
@@ -27,7 +29,7 @@ class Forward : StepImpl() {
     companion object {
         private var lastImageBounds: String? = null
         private var lastTextMsg: String? = null // 记录上一次的文字消息内容
-        private var DEBUG: Boolean = false
+        private var DEBUG: Boolean = true
         private var isLastMsgText: Boolean? = false
         private var lastStep: Int? = 0 // 记录最后执行的步骤
         private var ProcessedMsgText: String? = null // 记录全局内容
@@ -68,7 +70,7 @@ class Forward : StepImpl() {
      */
     private fun findTextViewByIdAndText(viewId: String, text: String): android.view.accessibility.AccessibilityNodeInfo? {
         return AssistsCore.getAllNodes().find {
-            it.className == "android.widget.TextView" &&
+            it.className == WechatResourceIds.NodeClasses.TEXT_VIEW &&
             it.viewIdResourceName == viewId &&
             it.text?.toString() == text
         }
@@ -79,7 +81,7 @@ class Forward : StepImpl() {
      */
     private fun findTextViewById(viewId: String): android.view.accessibility.AccessibilityNodeInfo? {
         return AssistsCore.getAllNodes().find {
-            it.className == "android.widget.TextView" &&
+            it.className == WechatResourceIds.NodeClasses.TEXT_VIEW &&
             it.viewIdResourceName == viewId
         }
     }
@@ -89,7 +91,7 @@ class Forward : StepImpl() {
      */
     private fun findAllTextViewById(viewId: String): List<android.view.accessibility.AccessibilityNodeInfo> {
         return AssistsCore.getAllNodes().filter {
-            it.className == "android.widget.TextView" &&
+            it.className == WechatResourceIds.NodeClasses.TEXT_VIEW &&
             it.viewIdResourceName == viewId
         }
     }
@@ -99,7 +101,7 @@ class Forward : StepImpl() {
      */
     private fun findLinearLayoutById(viewId: String): android.view.accessibility.AccessibilityNodeInfo? {
         return AssistsCore.getAllNodes().find {
-            it.className == "android.widget.LinearLayout" &&
+            it.className == WechatResourceIds.NodeClasses.LINEAR_LAYOUT &&
             it.viewIdResourceName == viewId
         }
     }
@@ -109,7 +111,7 @@ class Forward : StepImpl() {
      */
     private fun findListViewById(viewId: String): android.view.accessibility.AccessibilityNodeInfo? {
         return AssistsCore.getAllNodes().find {
-            it.className == "android.widget.ListView" &&
+            it.className == WechatResourceIds.NodeClasses.LIST_VIEW &&
             it.viewIdResourceName == viewId
         }
     }
@@ -169,16 +171,16 @@ class Forward : StepImpl() {
     private fun isWechatMainPage(): Boolean {
         val nodes = AssistsCore.getAllNodes()
         // 检查是否在通讯录页面
-        val isInContactPage = findTextViewByIdAndText("com.tencent.mm:id/icon_tv", "通讯录") != null
+        val isInContactPage = findTextViewByIdAndText(WechatResourceIds.ICON_TV, WechatResourceIds.ButtonTexts.CONTACTS) != null
         
         if (isInContactPage) {
             // 如果在通讯录页面，点击微信切换到主页面
-            val wechatTab = findTextViewByIdAndText("com.tencent.mm:id/icon_tv", "微信")
+            val wechatTab = findTextViewByIdAndText(WechatResourceIds.ICON_TV, WechatResourceIds.ButtonTexts.WECHAT)
             wechatTab?.findFirstParentClickable()?.click()
         }
         
         // 检查是否在微信主页面
-        return findTextViewByIdAndText("android:id/text1", "微信") != null
+        return findTextViewByIdAndText(WechatResourceIds.TEXT1, WechatResourceIds.ButtonTexts.WECHAT) != null
     }
 
     /**
@@ -230,7 +232,7 @@ class Forward : StepImpl() {
             LogWrapper.logAppend("STEP_1001: 开始执行 - 获取联系人列表")
             
             // 1. 点击通讯录
-            val contactTab = findTextViewByIdAndText("com.tencent.mm:id/icon_tv", "通讯录")
+            val contactTab = findTextViewByIdAndText(WechatResourceIds.ICON_TV, WechatResourceIds.ButtonTexts.CONTACTS)
             
             if (contactTab != null) {
                 LogWrapper.logAppend("已找到通讯录按钮，2秒后点击")
@@ -248,7 +250,7 @@ class Forward : StepImpl() {
             setLastStep(StepTag.STEP_1002)
             LogWrapper.logAppend("STEP_1002: 开始执行 - 点击群聊")
             
-            val groupChat = findTextViewByIdAndText("com.tencent.mm:id/n9", "群聊")
+            val groupChat = findTextViewByIdAndText(WechatResourceIds.N9, WechatResourceIds.ButtonTexts.GROUP_CHAT)
             
             if (groupChat != null) {
                 LogWrapper.logAppend("已找到群聊按钮，2秒后点击")
@@ -267,7 +269,7 @@ class Forward : StepImpl() {
             LogWrapper.logAppend("STEP_1003: 开始执行 - 遍历群聊列表")
             
             val groupNames = mutableSetOf<String>()
-            val groupNodes = findAllTextViewById("com.tencent.mm:id/cg1")
+            val groupNodes = findAllTextViewById(WechatResourceIds.CG1)
             
             groupNodes.forEach { node ->
                 node.text?.toString()?.let { name ->
@@ -295,7 +297,7 @@ class Forward : StepImpl() {
             setLastStep(StepTag.STEP_1004)
             LogWrapper.logAppend("STEP_1004: 开始执行 - 点击标签")
             
-            val tagButton = findTextViewByIdAndText("com.tencent.mm:id/n9", "标签")
+            val tagButton = findTextViewByIdAndText(WechatResourceIds.N9, WechatResourceIds.ButtonTexts.TAG)
             
             if (tagButton != null) {
                 LogWrapper.logAppend("已找到标签按钮，2秒后点击")
@@ -313,7 +315,7 @@ class Forward : StepImpl() {
             setLastStep(StepTag.STEP_1005)
             LogWrapper.logAppend("STEP_1005: 开始执行 - 点击转发")
             
-            val forwardButton = findTextViewByIdAndText("com.tencent.mm:id/hs8", "转发")
+            val forwardButton = findTextViewByIdAndText(WechatResourceIds.HS8, WechatResourceIds.ButtonTexts.FORWARD)
             
             if (forwardButton != null) {
                 LogWrapper.logAppend("已找到转发按钮，2秒后点击")
@@ -331,7 +333,7 @@ class Forward : StepImpl() {
             setLastStep(StepTag.STEP_1006)
             LogWrapper.logAppend("STEP_1006: 开始执行 - 获取转发页面的联系人")
             
-            val contactNodes = findAllTextViewById("com.tencent.mm:id/kbq")
+            val contactNodes = findAllTextViewById(WechatResourceIds.KBQ)
             
             contactNodes.forEach { node ->
                 node.text?.toString()?.let { name ->
@@ -370,9 +372,9 @@ class Forward : StepImpl() {
 
             // 双击底部Tab"微信"
             val tabNodes = AssistsCore.getAllNodes().filter {
-                it.className == "android.widget.TextView"
-                        && it.viewIdResourceName == "com.tencent.mm:id/icon_tv"
-                        && it.text?.toString() == "微信"
+                it.className == WechatResourceIds.NodeClasses.TEXT_VIEW
+                        && it.viewIdResourceName == WechatResourceIds.ICON_TV
+                        && it.text?.toString() == WechatResourceIds.ButtonTexts.WECHAT
             }
             
             if (tabNodes.isNotEmpty()) {
@@ -386,18 +388,18 @@ class Forward : StepImpl() {
             }
             // 查找所有聊天行（每一行的 LinearLayout，id=cj0）
             val allRows = AssistsCore.getAllNodes().filter {
-                it.className == "android.widget.LinearLayout" && it.viewIdResourceName == "com.tencent.mm:id/cj0"
+                it.className == WechatResourceIds.NodeClasses.LINEAR_LAYOUT && it.viewIdResourceName == WechatResourceIds.CJ0
             }
 
             // 遍历每一行，递归查找 a_h（小红点） 和 kbq（群名）
             for (row in allRows) {
                 val allDescendants = row.getNodes() // 递归获取所有后代节点
-                val hasAh = allDescendants.any { it.viewIdResourceName == "com.tencent.mm:id/a_h" } // 小红点
+                val hasAh = allDescendants.any { it.viewIdResourceName == WechatResourceIds.A_H } // 小红点
                 val kbqNode = allDescendants.find {
-                    it.viewIdResourceName == "com.tencent.mm:id/kbq" && (it.text?.contains(ContactList.sourceGroupName) == true) // 群名
+                    it.viewIdResourceName == WechatResourceIds.KBQ && (it.text?.contains(ContactList.sourceGroupName) == true) // 群名
                 }
                 val ht5Node = allDescendants.find {
-                    it.viewIdResourceName == "com.tencent.mm:id/ht5" && (it.text?.contains("关注的人") == true) // 关注的人
+                    it.viewIdResourceName == WechatResourceIds.HT5 && (it.text?.contains(WechatResourceIds.ButtonTexts.FOLLOWED_PEOPLE) == true) // 关注的人
                 }
                 if (DEBUG && kbqNode != null) { //调试：不需要小红点
                     LogWrapper.logAppend("DEBUG 模式，跳过小红点")
@@ -428,7 +430,12 @@ class Forward : StepImpl() {
 
             // 1. 获取所有消息块
             val allMsgBlocks = AssistsCore.getAllNodes().filter {
-                it.className == "android.widget.RelativeLayout" && it.viewIdResourceName == "com.tencent.mm:id/bn1"
+                it.className == WechatResourceIds.NodeClasses.RELATIVE_LAYOUT && it.viewIdResourceName == WechatResourceIds.BN1
+            }
+            
+            Log.d("Forward", "找到消息块数量: ${allMsgBlocks.size}")
+            allMsgBlocks.forEachIndexed { index, block ->
+                Log.d("Forward", "消息块[$index]: bounds=${block.getBoundsInScreen()}")
             }
 
             // 2. 查找线报员发送的最新图片消息
@@ -439,31 +446,69 @@ class Forward : StepImpl() {
             // 倒序遍历，优先取最新
             for (msgBlock in allMsgBlocks.reversed()) {
                 // 查找发送者节点
-                LogWrapper.logAppend("查找线报员的图片消息")
+                Log.d("Forward", "查找线报员的图片消息")
                 val senderNode = msgBlock.getNodes().find {
-                    it.className == "android.widget.TextView"
-                            && it.viewIdResourceName == "com.tencent.mm:id/brc"
+                    it.className == WechatResourceIds.NodeClasses.TEXT_VIEW
+                            && it.viewIdResourceName == WechatResourceIds.BRC
                             && it.text?.toString()
                         ?.contains(ContactList.sourceRobotName) == true
                 }
 
                 // 如果找到线报员的消息，再查找图片节点和时间节点
                 if (senderNode != null) {
+                    Log.d("Forward", "找到线报员的消息")
+                    
+                    // 打印所有子节点信息用于调试
+                    val allChildNodes = msgBlock.getNodes()
+                    Log.d("Forward", "消息块子节点数量: ${allChildNodes.size}")
+                    
+                    // 查找所有BR1节点（时间）
+                    val timeNodes = allChildNodes.filter { it.viewIdResourceName == WechatResourceIds.BR1 }
+                    Log.d("Forward", "BR1节点数量: ${timeNodes.size}")
+                    timeNodes.forEachIndexed { index, node ->
+                        Log.d("Forward", "BR1节点[$index]: text=${node.text}, className=${node.className}")
+                    }
+                    
+                    // 查找所有BKO节点（图片）
+                    val imageNodes = allChildNodes.filter { it.viewIdResourceName == WechatResourceIds.BKO }
+                    Log.d("Forward", "BKO节点数量: ${imageNodes.size}")
+                    imageNodes.forEachIndexed { index, node ->
+                        Log.d("Forward", "BKO节点[$index]: className=${node.className}, clickable=${node.isClickable}, longClickable=${node.isLongClickable}")
+                    }
+                    
+                    // 查找所有BKG节点（图片，可长按）
+                    val bkgNodes = allChildNodes.filter { it.viewIdResourceName == WechatResourceIds.BKG }
+                    Log.d("Forward", "BKG节点数量: ${bkgNodes.size}")
+                    bkgNodes.forEachIndexed { index, node ->
+                        Log.d("Forward", "BKG节点[$index]: className=${node.className}, clickable=${node.isClickable}, longClickable=${node.isLongClickable}")
+                    }
+                    
                     // 查找时间节点
-                    val timeNode = msgBlock.getNodes().find {
-                        it.className == "android.widget.TextView"
-                                && it.viewIdResourceName == "com.tencent.mm:id/br1"
+                    val timeNode = allChildNodes.find {
+                        it.className == WechatResourceIds.NodeClasses.TEXT_VIEW
+                                && it.viewIdResourceName == WechatResourceIds.BR1
                     }
                     currentMessageTime = timeNode?.text?.toString()
+                    Log.d("Forward", "currentMessageTime: $currentMessageTime")
 
-                    val imageNode = msgBlock.getNodes().find {
-                        it.viewIdResourceName == "com.tencent.mm:id/bkg" && it.isClickable && it.isLongClickable
+                    // 查找图片节点 - 优先查找BKG节点（可长按），然后查找BKO节点
+                    val imageNode = allChildNodes.find {
+                        it.viewIdResourceName == WechatResourceIds.BKG
+                    } ?: allChildNodes.find {
+                        it.viewIdResourceName == WechatResourceIds.BKO
                     }
+                    Log.d("Forward", "imageNode: $imageNode")
+                    
                     if (imageNode != null) {
                         targetImageNode = imageNode
                         currentImageBounds = imageNode.getBoundsInScreen().toShortString()
+                        Log.d("Forward", "currentImageBounds: $currentImageBounds")
                         break
+                    } else {
+                        Log.d("Forward", "当前消息块中没有找到图片节点，继续查找下一个消息块")
                     }
+                } else {
+                    Log.d("Forward", "当前消息块不是线报员发送的")
                 }
             }
 
@@ -514,9 +559,9 @@ class Forward : StepImpl() {
             LogWrapper.logAppend("STEP_4: 开始执行 - 查找并点击转发按钮")
             // 1. 查找所有 text=转发 且 resource-id=obc 的 TextView
             val forwardTextNodes = AssistsCore.getAllNodes().filter {
-                it.className == "android.widget.TextView"
-                        && it.viewIdResourceName == "com.tencent.mm:id/obc"
-                        && it.text?.toString() == "转发"
+                it.className == WechatResourceIds.NodeClasses.TEXT_VIEW
+                        && it.viewIdResourceName == WechatResourceIds.OBC
+                        && it.text?.toString() == WechatResourceIds.ButtonTexts.FORWARD
             }
             if (forwardTextNodes.isNotEmpty()) {
                 val forwardTextNode = forwardTextNodes.first()
@@ -539,9 +584,9 @@ class Forward : StepImpl() {
             setLastStep(StepTag.STEP_5)
             LogWrapper.logAppend("STEP_5: 开始执行 - 点击转发按钮")
             val forwardTextNodes = AssistsCore.getAllNodes().filter {
-                it.className == "android.widget.TextView"
-                        && it.viewIdResourceName == "com.tencent.mm:id/obc"
-                        && it.text?.toString() == "转发"
+                it.className == WechatResourceIds.NodeClasses.TEXT_VIEW
+                        && it.viewIdResourceName == WechatResourceIds.OBC
+                        && it.text?.toString() == WechatResourceIds.ButtonTexts.FORWARD
             }
             if (forwardTextNodes.isNotEmpty()) {
                 val forwardTextNode = forwardTextNodes.first()
@@ -571,8 +616,8 @@ class Forward : StepImpl() {
             LogWrapper.logAppend("选择转发对象")
             // 1. 查找并点击"多选"按钮
             val multiSelectNode = AssistsCore.getAllNodes().find {
-                it.className == "android.widget.TextView"
-                        && it.text?.toString()?.contains("多选") == true
+                it.className == WechatResourceIds.NodeClasses.TEXT_VIEW
+                        && it.text?.toString()?.contains(WechatResourceIds.ButtonTexts.MULTI_SELECT) == true
                         && it.isClickable
             }
             if (multiSelectNode != null) {
@@ -598,8 +643,8 @@ class Forward : StepImpl() {
             if (DEBUG) {
                 LogWrapper.logAppend("DEBUG 模式，只选择文件传输助手")
                 val fileTransferNode = AssistsCore.getAllNodes().find {
-                    it.className == "android.widget.TextView"
-                            && it.text?.toString() == "文件传输助手"
+                    it.className == WechatResourceIds.NodeClasses.TEXT_VIEW
+                            && it.text?.toString() == WechatResourceIds.ButtonTexts.FILE_TRANSFER
                 }
                 
                 if (fileTransferNode != null) {
@@ -611,8 +656,8 @@ class Forward : StepImpl() {
                 } else {
                     LogWrapper.logAppend("未找到文件传输助手，尝试滚动列表")
                     val listContainer = AssistsCore.getAllNodes().find {
-                        it.className == "android.widget.ListView" &&
-                                it.viewIdResourceName == "com.tencent.mm:id/i3y"
+                        it.className == WechatResourceIds.NodeClasses.LIST_VIEW &&
+                                it.viewIdResourceName == WechatResourceIds.I3Y
                     }
 
                     if (listContainer != null && listContainer.scrollForward()) {
@@ -637,7 +682,7 @@ class Forward : StepImpl() {
 
             // 查找目标群组节点
             val groupNode = AssistsCore.getAllNodes().find {
-                it.className == "android.widget.TextView"
+                it.className == WechatResourceIds.NodeClasses.TEXT_VIEW
                         && it.text?.toString()?.contains(currentGroup) == true
             }
 
@@ -651,8 +696,8 @@ class Forward : StepImpl() {
             } else {
                 LogWrapper.logAppend("未找到群组 $currentGroup，尝试滚动列表")
                 val listContainer = AssistsCore.getAllNodes().find {
-                    it.className == "android.widget.ListView" &&
-                            it.viewIdResourceName == "com.tencent.mm:id/i3y"
+                    it.className == WechatResourceIds.NodeClasses.LIST_VIEW &&
+                            it.viewIdResourceName == WechatResourceIds.I3Y
                 }
 
                 if (listContainer != null && listContainer.scrollForward()) {
@@ -671,8 +716,8 @@ class Forward : StepImpl() {
             setLastStep(StepTag.STEP_9)
             LogWrapper.logAppend("STEP_9: 开始执行 - 查找并点击完成按钮")
             val finishBtn = AssistsCore.getAllNodes().find {
-                (it.className == "android.widget.Button" || it.className == "android.widget.TextView")
-                        && it.text?.toString()?.contains("完成") == true
+                (it.className == WechatResourceIds.NodeClasses.BUTTON || it.className == WechatResourceIds.NodeClasses.TEXT_VIEW)
+                        && it.text?.toString()?.contains(WechatResourceIds.ButtonTexts.FINISH) == true
                         && it.isClickable
             }
             if (finishBtn != null) {
@@ -701,8 +746,8 @@ class Forward : StepImpl() {
             setLastStep(StepTag.STEP_10)
             LogWrapper.logAppend("STEP_10: 开始执行 - 查找并点击发送按钮")
             val sendBtn = AssistsCore.getAllNodes().find {
-                (it.className == "android.widget.Button" || it.className == "android.widget.TextView")
-                        && it.text?.toString()?.contains("发送") == true
+                (it.className == WechatResourceIds.NodeClasses.BUTTON || it.className == WechatResourceIds.NodeClasses.TEXT_VIEW)
+                        && it.text?.toString()?.contains(WechatResourceIds.ButtonTexts.SEND) == true
                         && it.isClickable
             }
             if (sendBtn != null) {
@@ -734,7 +779,7 @@ class Forward : StepImpl() {
             setLastStep(StepTag.STEP_11)
             LogWrapper.logAppend("STEP_11: 开始执行 - 查找线报员最新文字消息")
             val allMsgBlocks = AssistsCore.getAllNodes().filter {
-                it.className == "android.widget.RelativeLayout" && it.viewIdResourceName == "com.tencent.mm:id/bn1"
+                it.className == WechatResourceIds.NodeClasses.RELATIVE_LAYOUT && it.viewIdResourceName == WechatResourceIds.BKL
             }
 
             var latestMsg: String? = null
@@ -746,15 +791,15 @@ class Forward : StepImpl() {
             for ((i, msgBlock) in allMsgBlocks.withIndex().reversed()) {
                 // 1. 查找发送者节点
                 val senderNode = msgBlock.getNodes().find {
-                    it.className == "android.widget.TextView"
-                            && it.viewIdResourceName == "com.tencent.mm:id/brc"
+                    it.className == WechatResourceIds.NodeClasses.TEXT_VIEW
+                            && it.viewIdResourceName == WechatResourceIds.BRC
                             && it.text?.toString()
                         ?.contains(ContactList.sourceRobotName) == true
                 }
 
                 // 2. 查找图片节点
                 val imageNode = msgBlock.getNodes().find {
-                    it.viewIdResourceName == "com.tencent.mm:id/bkg"
+                    it.viewIdResourceName == WechatResourceIds.BKO
                 }
                 if (latestImageIndex == -1 && imageNode != null) {
                     latestImageIndex = i
@@ -763,8 +808,8 @@ class Forward : StepImpl() {
                 // 3. 如果找到线报员的消息，再查找文字内容节点
                 if (senderNode != null) {
                     val contentNode = msgBlock.getNodes().find {
-                        it.className == "android.widget.TextView"
-                                && it.viewIdResourceName == "com.tencent.mm:id/bkl"
+                        it.className == WechatResourceIds.NodeClasses.TEXT_VIEW
+                                && it.viewIdResourceName == WechatResourceIds.BKL
                                 && !it.text.isNullOrBlank()
                     }
                     if (latestMsgIndex == -1 && contentNode != null) {
@@ -804,14 +849,14 @@ class Forward : StepImpl() {
             LogWrapper.logAppend("STEP_12: 开始执行 - 查找并进入京粉")
             // 1. 查找所有聊天行（每一行的 LinearLayout，id=cj0）
             val allRows = AssistsCore.getAllNodes().filter {
-                it.className == "android.widget.LinearLayout" && it.viewIdResourceName == "com.tencent.mm:id/cj0"
+                it.className == WechatResourceIds.NodeClasses.LINEAR_LAYOUT && it.viewIdResourceName == WechatResourceIds.CJ0
             }
 
             // 2. 遍历每一行，查找 kbq（群名）
             for (row in allRows) {
                 val allDescendants = row.getNodes() // 递归获取所有后代节点
                 val kbqNode = allDescendants.find {
-                    it.viewIdResourceName == "com.tencent.mm:id/kbq" && (it.text?.contains("京粉") == true)
+                    it.viewIdResourceName == WechatResourceIds.KBQ && (it.text?.contains("京粉") == true)
                 }
                 if (kbqNode != null) {
                     LogWrapper.logAppend("已找到并定位到京粉，2秒后点击。")
@@ -824,8 +869,8 @@ class Forward : StepImpl() {
 
             // 3. 如果没找到，尝试滚动列表
             val listContainer = AssistsCore.getAllNodes().find {
-                it.className == "android.widget.ListView" &&
-                        it.viewIdResourceName == "com.tencent.mm:id/i3y"
+                it.className == WechatResourceIds.NodeClasses.LIST_VIEW &&
+                        it.viewIdResourceName == WechatResourceIds.I3Y
             }
 
             if (listContainer != null && listContainer.scrollForward()) {
@@ -841,10 +886,10 @@ class Forward : StepImpl() {
             setLastStep(StepTag.STEP_13)
             LogWrapper.logAppend("STEP_13: 开始执行 - 切换到发消息")
             val switchMsgNode = AssistsCore.getAllNodes().find {
-                it.className == "android.widget.ImageView"
-                        && it.viewIdResourceName == "com.tencent.mm:id/blp"
+                it.className == WechatResourceIds.NodeClasses.IMAGE_VIEW
+                        && it.viewIdResourceName == WechatResourceIds.BLP
                         && it.isClickable
-                        && it.contentDescription?.contains("切换到发消息") == true
+                        && it.contentDescription?.contains(WechatResourceIds.ButtonTexts.SWITCH_TO_MESSAGE) == true
             }
             if (switchMsgNode != null) {
                 LogWrapper.logAppend("已定位到切换到发消息按钮，2秒后点击。")
@@ -864,8 +909,8 @@ class Forward : StepImpl() {
             LogWrapper.logAppend("STEP_14: 开始执行 - 点击输入框并设置文本内容")
             if (lastStep == StepTag.STEP_15) {
                 val editTextNode = AssistsCore.getAllNodes().find {
-                    it.className == "android.widget.EditText"
-                            && it.viewIdResourceName == "com.tencent.mm:id/bkk"
+                    it.className == WechatResourceIds.NodeClasses.EDIT_TEXT
+                            && it.viewIdResourceName == WechatResourceIds.BKK
                             && it.isClickable && it.isEnabled && it.isFocusable
                 }
 
@@ -884,8 +929,8 @@ class Forward : StepImpl() {
 
             // 查找输入框
             val editTextNode = AssistsCore.getAllNodes().find {
-                it.className == "android.widget.EditText"
-                        && it.viewIdResourceName == "com.tencent.mm:id/bkk"
+                it.className == WechatResourceIds.NodeClasses.EDIT_TEXT
+                        && it.viewIdResourceName == WechatResourceIds.BKK
                         && it.isClickable && it.isEnabled && it.isFocusable
             }
 
@@ -912,8 +957,8 @@ class Forward : StepImpl() {
             LogWrapper.logAppend("延迟 2 秒让节点加载")
             delay(2000) //延迟 2 秒让节点加载
             val sendBtn = AssistsCore.getAllNodes().find {
-                (it.className == "android.widget.Button" || it.className == "android.widget.TextView")
-                        && it.text?.contains("发送") == true && it.isClickable
+                (it.className == WechatResourceIds.NodeClasses.BUTTON || it.className == WechatResourceIds.NodeClasses.TEXT_VIEW)
+                        && it.text?.contains(WechatResourceIds.ButtonTexts.SEND) == true && it.isClickable
             }
             if (sendBtn != null) {
                 LogWrapper.logAppend("已定位到发送按钮，2秒后点击。")
@@ -933,7 +978,7 @@ class Forward : StepImpl() {
 
             // 1. 获取所有消息块
             val allMsgBlocks = AssistsCore.getAllNodes().filter {
-                it.className == "android.widget.RelativeLayout" && it.viewIdResourceName == "com.tencent.mm:id/bn1"
+                it.className == WechatResourceIds.NodeClasses.RELATIVE_LAYOUT && it.viewIdResourceName == WechatResourceIds.BN1
             }
 
             // 2. 查找京粉发送的最新文字消息
@@ -944,8 +989,8 @@ class Forward : StepImpl() {
             for (msgBlock in allMsgBlocks.reversed()) {
                 // 查找消息内容节点
                 val contentNode = msgBlock.getNodes().find {
-                    it.className == "android.widget.TextView"
-                            && it.viewIdResourceName == "com.tencent.mm:id/bkl"
+                    it.className == WechatResourceIds.NodeClasses.TEXT_VIEW
+                            && it.viewIdResourceName == WechatResourceIds.BKL
                             && !it.text.isNullOrBlank()
                 }
 
@@ -982,9 +1027,9 @@ class Forward : StepImpl() {
             LogWrapper.logAppend("STEP_17: 开始执行 - 双击顶部微信并进入文件传输助手")
             // 1. 查找顶部的"微信"文本
             val wechatNode = AssistsCore.getAllNodes().find {
-                it.className == "android.widget.TextView"
-                        && it.viewIdResourceName == "android:id/text1"
-                        && it.text?.toString() == "微信"
+                it.className == WechatResourceIds.NodeClasses.TEXT_VIEW
+                        && it.viewIdResourceName == WechatResourceIds.TEXT1
+                        && it.text?.toString() == WechatResourceIds.ButtonTexts.WECHAT
             }
 
             if (wechatNode != null) {
@@ -1002,9 +1047,9 @@ class Forward : StepImpl() {
 
             // 2. 查找并点击"文件传输助手"
             val fileTransferNode = AssistsCore.getAllNodes().find {
-                it.className == "android.view.View"
-                        && it.viewIdResourceName == "com.tencent.mm:id/kbq"
-                        && it.text?.toString() == "文件传输助手"
+                it.className == WechatResourceIds.NodeClasses.VIEW
+                        && it.viewIdResourceName == WechatResourceIds.KBQ
+                        && it.text?.toString() == WechatResourceIds.ButtonTexts.FILE_TRANSFER
             }
 
             if (fileTransferNode != null) {
@@ -1025,8 +1070,8 @@ class Forward : StepImpl() {
             LogWrapper.logAppend("STEP_18: 开始执行 - 在文件传输助手中粘贴内容并发送")
             // 1. 查找输入框
             val editTextNode = AssistsCore.getAllNodes().find {
-                it.className == "android.widget.EditText"
-                        && it.viewIdResourceName == "com.tencent.mm:id/bkk"
+                it.className == WechatResourceIds.NodeClasses.EDIT_TEXT
+                        && it.viewIdResourceName == WechatResourceIds.BKK
                         && it.isClickable && it.isEnabled && it.isFocusable
             }
 
@@ -1038,8 +1083,8 @@ class Forward : StepImpl() {
                 }
                     // 4. 查找并点击发送按钮
                     val sendBtn = AssistsCore.getAllNodes().find {
-                        (it.className == "android.widget.Button" || it.className == "android.widget.TextView")
-                                && it.text?.contains("发送") == true && it.isClickable
+                        (it.className == WechatResourceIds.NodeClasses.BUTTON || it.className == WechatResourceIds.NodeClasses.TEXT_VIEW)
+                                && it.text?.contains(WechatResourceIds.ButtonTexts.SEND) == true && it.isClickable
                     }
                     if (sendBtn != null) {
                         LogWrapper.logAppend("已定位到发送按钮，2秒后点击。")
@@ -1075,7 +1120,7 @@ class Forward : StepImpl() {
             retryCount++
             // 1. 获取所有 android.widget.TextView 节点
             val allTextViews = AssistsCore.getAllNodes().filter {
-                it.className == "android.widget.TextView"
+                it.className == WechatResourceIds.NodeClasses.TEXT_VIEW
             }
             if (allTextViews.isEmpty()) {
                 LogWrapper.logAppend("未找到任何TextView，重试")
@@ -1095,8 +1140,8 @@ class Forward : StepImpl() {
             // 4. 查找并点击"分享"按钮
             delay(3000)
             val shareButton = AssistsCore.getAllNodes().find {
-                it.className == "android.widget.ImageButton"
-                        && it.contentDescription?.toString() == "分享"
+                it.className == WechatResourceIds.NodeClasses.IMAGE_BUTTON
+                        && it.contentDescription?.toString() == WechatResourceIds.ButtonTexts.SHARE
                         && it.isClickable
             }
             if (shareButton != null) {
@@ -1122,9 +1167,9 @@ class Forward : StepImpl() {
 
             // 1. 查找顶部的"微信"文本
             val wechatNode = AssistsCore.getAllNodes().find {
-                it.className == "android.widget.TextView"
-                        && it.viewIdResourceName == "android:id/text1"
-                        && it.text?.toString() == "微信"
+                it.className == WechatResourceIds.NodeClasses.TEXT_VIEW
+                        && it.viewIdResourceName == WechatResourceIds.TEXT1
+                        && it.text?.toString() == WechatResourceIds.ButtonTexts.WECHAT
             }
 
             wechatNode?.findFirstParentClickable()?.let { parent ->

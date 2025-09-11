@@ -9,7 +9,7 @@ object ContactList {
     private const val KEY_ROBOT_NAME = "robot_name"
     
     var sourceGroupName = "京东线报交流群"
-    var sourceRobotName = "阿汤哥会爆单吗＠自在极意京粉线报"
+    var sourceRobotName = "阿汤哥会爆单吗＠自在极意线报"
     
     fun saveSettings(context: Context) {
         context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE).edit().apply {
