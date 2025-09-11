@@ -29,7 +29,7 @@ class Forward : StepImpl() {
     companion object {
         private var lastImageBounds: String? = null
         private var lastTextMsg: String? = null // 记录上一次的文字消息内容
-        private var DEBUG: Boolean = true
+        private var DEBUG: Boolean = false
         private var isLastMsgText: Boolean? = false
         private var lastStep: Int? = 0 // 记录最后执行的步骤
         private var ProcessedMsgText: String? = null // 记录全局内容
@@ -779,8 +779,11 @@ class Forward : StepImpl() {
             setLastStep(StepTag.STEP_11)
             LogWrapper.logAppend("STEP_11: 开始执行 - 查找线报员最新文字消息")
             val allMsgBlocks = AssistsCore.getAllNodes().filter {
-                it.className == WechatResourceIds.NodeClasses.RELATIVE_LAYOUT && it.viewIdResourceName == WechatResourceIds.BKL
+                it.className == WechatResourceIds.NodeClasses.RELATIVE_LAYOUT && it.viewIdResourceName == WechatResourceIds.BN1
             }
+            
+            Log.d("Forward", "STEP_11: 找到消息块数量: ${allMsgBlocks.size}")
+            Log.d("Forward", "STEP_11: 查找线报员名称: ${ContactList.sourceRobotName}")
 
             var latestMsg: String? = null
             var latestMsgNode: android.view.accessibility.AccessibilityNodeInfo? = null
@@ -789,12 +792,18 @@ class Forward : StepImpl() {
 
             // 倒序遍历，优先取最新
             for ((i, msgBlock) in allMsgBlocks.withIndex().reversed()) {
+                Log.d("Forward", "STEP_11: 检查消息块[$i]")
+                
                 // 1. 查找发送者节点
                 val senderNode = msgBlock.getNodes().find {
                     it.className == WechatResourceIds.NodeClasses.TEXT_VIEW
                             && it.viewIdResourceName == WechatResourceIds.BRC
                             && it.text?.toString()
                         ?.contains(ContactList.sourceRobotName) == true
+                }
+                
+                if (senderNode != null) {
+                    Log.d("Forward", "STEP_11: 找到线报员消息，发送者: ${senderNode.text}")
                 }
 
                 // 2. 查找图片节点
@@ -803,19 +812,28 @@ class Forward : StepImpl() {
                 }
                 if (latestImageIndex == -1 && imageNode != null) {
                     latestImageIndex = i
+                    Log.d("Forward", "STEP_11: 找到图片消息，索引: $i")
                 }
 
                 // 3. 如果找到线报员的消息，再查找文字内容节点
                 if (senderNode != null) {
+                    Log.d("Forward", "STEP_11: 在线报员消息中查找文字内容")
                     val contentNode = msgBlock.getNodes().find {
                         it.className == WechatResourceIds.NodeClasses.TEXT_VIEW
                                 && it.viewIdResourceName == WechatResourceIds.BKL
                                 && !it.text.isNullOrBlank()
                     }
-                    if (latestMsgIndex == -1 && contentNode != null) {
-                        latestMsg = contentNode.text?.toString()
-                        latestMsgNode = contentNode
-                        latestMsgIndex = i
+                    
+                    if (contentNode != null) {
+                        Log.d("Forward", "STEP_11: 找到文字内容: ${contentNode.text}")
+                        if (latestMsgIndex == -1) {
+                            latestMsg = contentNode.text?.toString()
+                            latestMsgNode = contentNode
+                            latestMsgIndex = i
+                            Log.d("Forward", "STEP_11: 设置最新消息: $latestMsg")
+                        }
+                    } else {
+                        Log.d("Forward", "STEP_11: 未找到文字内容节点")
                     }
                 }
             }
@@ -827,7 +845,29 @@ class Forward : StepImpl() {
             }
 
             // 判断是否需要back
-            if (latestMsg == null || latestMsg == lastTextMsg || (latestMsgIndex < latestImageIndex && latestImageIndex != -1)) {
+            Log.d("Forward", "STEP_11判断条件:")
+            Log.d("Forward", "  latestMsg: $latestMsg")
+            Log.d("Forward", "  lastTextMsg: $lastTextMsg")
+            Log.d("Forward", "  latestMsgIndex: $latestMsgIndex")
+            Log.d("Forward", "  latestImageIndex: $latestImageIndex")
+            Log.d("Forward", "  latestMsg == null: ${latestMsg == null}")
+            Log.d("Forward", "  latestMsg == lastTextMsg: ${latestMsg == lastTextMsg}")
+            Log.d("Forward", "  latestMsgIndex < latestImageIndex: ${latestMsgIndex < latestImageIndex}")
+            Log.d("Forward", "  latestImageIndex != -1: ${latestImageIndex != -1}")
+            Log.d("Forward", "  (latestMsgIndex < latestImageIndex && latestImageIndex != -1): ${latestMsgIndex < latestImageIndex && latestImageIndex != -1}")
+            
+            if (latestMsg == null) {
+                Log.d("Forward", "STEP_11: 返回原因 - latestMsg为null")
+                LogWrapper.logAppend("无有效文字消息，返回。")
+                AssistsCore.back()
+                return@next Step.get(StepTag.STEP_2, delay = 2000)
+            } else if (latestMsg == lastTextMsg) {
+                Log.d("Forward", "STEP_11: 返回原因 - 消息内容未变化")
+                LogWrapper.logAppend("无有效文字消息，返回。")
+                AssistsCore.back()
+                return@next Step.get(StepTag.STEP_2, delay = 2000)
+            } else if (latestMsgIndex < latestImageIndex && latestImageIndex != -1) {
+                Log.d("Forward", "STEP_11: 返回原因 - 文字消息比图片消息旧")
                 LogWrapper.logAppend("无有效文字消息，返回。")
                 AssistsCore.back()
                 return@next Step.get(StepTag.STEP_2, delay = 2000)
@@ -1102,10 +1142,10 @@ class Forward : StepImpl() {
             }
         }
 
-        //19. 查找最新消息并转发
+        //19. 长按文字区域并查找转发按钮
         collector.next(StepTag.STEP_19) { step ->
             setLastStep(StepTag.STEP_19)
-            LogWrapper.logAppend("STEP_19: 开始执行 - 展开消息全屏并转发")
+            LogWrapper.logAppend("STEP_19: 开始执行 - 长按文字区域并查找转发按钮")
             // 增加重试计数
             val maxRetry = 20
             if (retryCount >= maxRetry) {
@@ -1118,45 +1158,87 @@ class Forward : StepImpl() {
                 }
             }
             retryCount++
-            // 1. 获取所有 android.widget.TextView 节点
-            val allTextViews = AssistsCore.getAllNodes().filter {
+            
+            // 1. 长按文字区域（com.tencent.mm:id/bkl并且long-clickable为true），等待弹出菜单
+            val longClickableTextNodes = AssistsCore.getAllNodes().filter {
                 it.className == WechatResourceIds.NodeClasses.TEXT_VIEW
+                        && it.viewIdResourceName == WechatResourceIds.BKL
+                        && it.isLongClickable
+                        && it.isVisibleToUser
+                        && !it.text.isNullOrBlank()
             }
-            if (allTextViews.isEmpty()) {
-                LogWrapper.logAppend("未找到任何TextView，重试")
+            
+            Log.d("Forward", "STEP_19: 找到可长按的文字节点数量: ${longClickableTextNodes.size}")
+            
+            if (longClickableTextNodes.isEmpty()) {
+                LogWrapper.logAppend("未找到可长按的文字区域，重试")
                 return@next Step.get(StepTag.STEP_19, delay = 2000)
             }
-            // 2. 取最后一个TextView节点
-            delay(2000)
-            val lastTextView = allTextViews.last()
-            if (lastTextView.isEnabled && lastTextView.isVisibleToUser) {
-                if (lastTextView.nodeGestureClickByDouble() == true) {
-                    LogWrapper.logAppend("已双击TextView使得消息全屏")
+            
+            // 长按最后一个文字节点（最新的消息）
+            val targetTextNode = longClickableTextNodes.last()
+            Log.d("Forward", "STEP_19: 长按文字节点，内容: ${targetTextNode.text}")
+            
+            // 获取文字节点的边界，计算右下角靠近边缘10个点的位置
+            val bounds = targetTextNode.getBoundsInScreen()
+            if (bounds != null) {
+                val rightX = bounds.right - 10f  // 距离右边缘10个点
+                val bottomY = bounds.bottom - 10f  // 距离下边缘10个点
+                Log.d("Forward", "STEP_19: 文字节点右下角坐标: ($rightX, $bottomY)")
+                
+                // 1. 双击右下角靠近边缘10个点的位置，此时会将文字信息全屏
+                if (AssistsCore.gestureClick(rightX, bottomY)) {
+                    delay(100) // 短暂延迟
+                    if (AssistsCore.gestureClick(rightX, bottomY)) {
+                        LogWrapper.logAppend("已双击文字区域，等待全屏显示")
+                        delay(3000) // 等待全屏显示
+                        
+                        // 2. 查找android.widget.ImageButton并且contentDescription?.toString()是'分享'
+                        LogWrapper.logAppend("开始查找分享按钮")
+                        
+                        val shareButton = AssistsCore.getAllNodes().find {
+                            it.className == WechatResourceIds.NodeClasses.IMAGE_BUTTON
+                                    && it.contentDescription?.toString() == WechatResourceIds.ButtonTexts.SHARE
+                                    && it.isClickable
+                                    && it.isVisibleToUser
+                        }
+                        
+                        Log.d("Forward", "STEP_19: 找到分享按钮: $shareButton")
+                        
+                        // 3. 点击该按钮，然后就设置isLastMsgText = true，ProcessedMsgText = null，resetRetryCount()，跳转到STEP6
+                        if (shareButton != null) {
+                            Log.d("Forward", "STEP_19: 分享按钮bounds: ${shareButton.getBoundsInScreen()}")
+                            if (shareButton.click()) {
+                                LogWrapper.logAppend("成功点击分享按钮")
+                                isLastMsgText = true
+                                LogWrapper.logAppend("设置 isLastMsgText 为 true")
+                                ProcessedMsgText = null
+                                LogWrapper.logAppend("设置 ProcessedMsgText 为 null")
+                                resetRetryCount()
+                                return@next Step.get(StepTag.STEP_6, delay = 2000)
+                            } else {
+                                LogWrapper.logAppend("点击分享按钮失败")
+                            }
+                        } else {
+                            LogWrapper.logAppend("未找到分享按钮")
+                        }
+                        
+                        // 否则重试
+                        LogWrapper.logAppend("查找分享按钮失败，重试")
+                        // 点击返回按钮或空白区域退出全屏
+                        AssistsCore.gestureClick(50f, 155f)
+                        return@next Step.get(StepTag.STEP_19, delay = 2000)
+                    } else {
+                        LogWrapper.logAppend("第二次点击失败，重试")
+                        return@next Step.get(StepTag.STEP_19, delay = 2000)
+                    }
+                } else {
+                    LogWrapper.logAppend("第一次点击失败，重试")
+                    return@next Step.get(StepTag.STEP_19, delay = 2000)
                 }
             } else {
-                LogWrapper.logAppend("TextView不可点击，重试")
+                LogWrapper.logAppend("无法获取文字节点边界，重试")
                 return@next Step.get(StepTag.STEP_19, delay = 2000)
-            }
-            // 4. 查找并点击"分享"按钮
-            delay(3000)
-            val shareButton = AssistsCore.getAllNodes().find {
-                it.className == WechatResourceIds.NodeClasses.IMAGE_BUTTON
-                        && it.contentDescription?.toString() == WechatResourceIds.ButtonTexts.SHARE
-                        && it.isClickable
-            }
-            if (shareButton != null) {
-                shareButton.click()
-                LogWrapper.logAppend("已点击分享按钮")
-                isLastMsgText = true
-                LogWrapper.logAppend("设置 isLastMsgText 为 true")
-                ProcessedMsgText = null
-                LogWrapper.logAppend("设置 ProcessedMsgText 为 null")
-                resetRetryCount()
-                return@next Step.get(StepTag.STEP_6, delay = 2000)
-            } else {
-                LogWrapper.logAppend("未找到分享按钮，尝试点击 X 按钮的位置。")
-                AssistsCore.gestureClick(50f, 155f)
-                return@next Step.get(StepTag.STEP_19, delay = 1000)
             }
         }
 
