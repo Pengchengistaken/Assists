@@ -69,18 +69,22 @@ class MainActivity : AppCompatActivity(), AssistsServiceListener {
                 // 先询问是否需要修改设置
                 XPopup.Builder(this@MainActivity).asConfirm(
                     "提示",
-                    "是否要修改监听设置？\n\n当前监听群：\n${ContactList.sourceGroupName}\n\n当前监听用户：\n${ContactList.sourceRobotName}",
+                    "是否要修改监听设置？\n\n当前监听群：\n${ContactList.sourceGroupName}\n\n当前监听用户：\n${ContactList.sourceRobotNames.joinToString("\n")}",
                     {
                         // 用户选择修改设置
                         // 第一个对话框：询问群名称
                         XPopup.Builder(this@MainActivity).asInputConfirm("设置监听群", "请输入要监听的群名称：", ContactList.sourceGroupName) { groupName ->
                             val finalGroupName = groupName.ifEmpty { ContactList.sourceGroupName }
                             // 第二个对话框：询问用户名称
-                            XPopup.Builder(this@MainActivity).asInputConfirm("设置监听用户", "请输入要监听的微信用户名称：", ContactList.sourceRobotName) { userName ->
-                                val finalUserName = userName.ifEmpty { ContactList.sourceRobotName }
+                            XPopup.Builder(this@MainActivity).asInputConfirm("设置监听用户", "请输入要监听的微信用户名称（多个用逗号分隔）：", ContactList.sourceRobotNames.joinToString(",")) { userName ->
+                                val finalUserNames = if (userName.isBlank()) {
+                                    ContactList.sourceRobotNames
+                                } else {
+                                    userName.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+                                }
                                 // 设置新的监听群和用户
                                 ContactList.sourceGroupName = finalGroupName
-                                ContactList.sourceRobotName = finalUserName
+                                ContactList.sourceRobotNames = finalUserNames
                                 // 保存设置
                                 ContactList.saveSettings(this@MainActivity)
                                 // 显示悬浮窗并开始执行

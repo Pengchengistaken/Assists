@@ -170,6 +170,16 @@ class Forward : StepImpl() {
     }
 
     /**
+     * 标准化文本，将全角字符转换为半角字符
+     * @param text 原始文本
+     * @return 标准化后的文本
+     */
+    private fun normalizeText(text: String): String {
+        // 将全角 @ (＠) 转换为半角 @
+        return text.replace("＠", "@")
+    }
+
+    /**
      * 判断当前是否在微信主页面
      * @return 是否在微信主页面
      */
@@ -449,14 +459,34 @@ class Forward : StepImpl() {
             var currentMessageTime: String? = null
 
             // 倒序遍历，优先取最新
+            Log.d("Forward", "要匹配的机器人名称列表: ${ContactList.sourceRobotNames.joinToString(", ")}")
             for (msgBlock in allMsgBlocks.reversed()) {
                 // 查找发送者节点
                 Log.d("Forward", "查找线报员的图片消息")
-                val senderNode = msgBlock.getNodes().find {
-                    it.className == WechatResourceIds.NodeClasses.TEXT_VIEW
-                            && it.viewIdResourceName == WechatResourceIds.BRC
-                            && it.text?.toString()
-                        ?.contains(ContactList.sourceRobotName) == true
+                val senderNode = msgBlock.getNodes().find { node ->
+                    val nodeText = node.text?.toString()
+                    val normalizedNodeText = nodeText?.let { normalizeText(it) }
+                    val containsRobotName = ContactList.sourceRobotNames.any { robotName -> 
+                        val normalizedRobotName = normalizeText(robotName)
+                        val matched = normalizedNodeText?.contains(normalizedRobotName) == true
+                        if (node.className == WechatResourceIds.NodeClasses.TEXT_VIEW && node.viewIdResourceName == WechatResourceIds.BRC) {
+                            Log.d("Forward", "检查节点: text=$nodeText, normalizedText=$normalizedNodeText, robotName=$robotName, normalizedRobotName=$normalizedRobotName, matched=$matched")
+                        }
+                        matched
+                    }
+                    if (containsRobotName) {
+                        val matchedName = ContactList.sourceRobotNames.find { robotName -> 
+                            val normalizedRobotName = normalizeText(robotName)
+                            normalizedNodeText?.contains(normalizedRobotName) == true
+                        }
+                        Log.d(
+                            "Forward",
+                            "找到匹配的线报员节点: className=${node.className}, viewIdResourceName=${node.viewIdResourceName}, text=$nodeText, robotName=$matchedName"
+                        )
+                    }
+                    node.className == WechatResourceIds.NodeClasses.TEXT_VIEW &&
+                            node.viewIdResourceName == WechatResourceIds.BRC &&
+                            containsRobotName
                 }
 
                 // 如果找到线报员的消息，再查找图片节点和时间节点
@@ -788,7 +818,7 @@ class Forward : StepImpl() {
             }
             
             Log.d("Forward", "STEP_11: 找到消息块数量: ${allMsgBlocks.size}")
-            Log.d("Forward", "STEP_11: 查找线报员名称: ${ContactList.sourceRobotName}")
+            Log.d("Forward", "STEP_11: 查找线报员名称: ${ContactList.sourceRobotNames.joinToString(", ")}")
 
             var latestMsg: String? = null
             var latestMsgNode: android.view.accessibility.AccessibilityNodeInfo? = null
@@ -800,11 +830,27 @@ class Forward : StepImpl() {
                 Log.d("Forward", "STEP_11: 检查消息块[$i]")
                 
                 // 1. 查找发送者节点
-                val senderNode = msgBlock.getNodes().find {
-                    it.className == WechatResourceIds.NodeClasses.TEXT_VIEW
-                            && it.viewIdResourceName == WechatResourceIds.BRC
-                            && it.text?.toString()
-                        ?.contains(ContactList.sourceRobotName) == true
+                val senderNode = msgBlock.getNodes().find { node ->
+                    val nodeText = node.text?.toString()
+                    val normalizedNodeText = nodeText?.let { normalizeText(it) }
+                    val containsRobotName = ContactList.sourceRobotNames.any { robotName -> 
+                        val normalizedRobotName = normalizeText(robotName)
+                        val matched = normalizedNodeText?.contains(normalizedRobotName) == true
+                        if (node.className == WechatResourceIds.NodeClasses.TEXT_VIEW && node.viewIdResourceName == WechatResourceIds.BRC) {
+                            Log.d("Forward", "STEP_11: 检查节点: text=$nodeText, normalizedText=$normalizedNodeText, robotName=$robotName, normalizedRobotName=$normalizedRobotName, matched=$matched")
+                        }
+                        matched
+                    }
+                    if (containsRobotName && node.className == WechatResourceIds.NodeClasses.TEXT_VIEW && node.viewIdResourceName == WechatResourceIds.BRC) {
+                        val matchedName = ContactList.sourceRobotNames.find { robotName -> 
+                            val normalizedRobotName = normalizeText(robotName)
+                            normalizedNodeText?.contains(normalizedRobotName) == true
+                        }
+                        Log.d("Forward", "STEP_11: 找到匹配的线报员节点: text=$nodeText, robotName=$matchedName")
+                    }
+                    node.className == WechatResourceIds.NodeClasses.TEXT_VIEW
+                            && node.viewIdResourceName == WechatResourceIds.BRC
+                            && containsRobotName
                 }
                 
                 if (senderNode != null) {
