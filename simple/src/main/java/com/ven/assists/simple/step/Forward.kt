@@ -423,7 +423,11 @@ class Forward : StepImpl() {
                     return@next Step.get(StepTag.STEP_3, delay = 2000)
                 } else if (hasAh && kbqNode != null && ht5Node != null) {
                     LogWrapper.logAppend("京东线报交流群有新消息且包含关注的人，2分钟后点击并进入执行。")
-                    delay(120_000)
+                    // 倒计时刷新
+                    for (secondsLeft in 120 downTo 1) {
+                        LogWrapper.logAppend("距离点击还有 $secondsLeft 秒...")
+                        delay(1000)
+                    }
                     kbqNode.findFirstParentClickable()?.click()
                     return@next Step.get(StepTag.STEP_3)
                 }
@@ -432,8 +436,12 @@ class Forward : StepImpl() {
                 LogWrapper.logAppend("DEBUG 模式，5秒钟后再检查。")
                 return@next Step.get(StepTag.STEP_2, delay = 5000)
             }
-            LogWrapper.logAppend("群里没有新消息, 一分钟后再检查。")
-            return@next Step.get(StepTag.STEP_2, delay = 60_000)
+            // 倒计时刷新，加入提示每剩余多少秒
+            for (secondsLeft in 60 downTo 1) {
+                LogWrapper.logAppend("群里没有新消息, 距离下次检查还有 $secondsLeft 秒...")
+                delay(1000)
+            }
+            return@next Step.get(StepTag.STEP_2)
         }
 
         //3. 获取最后一张图片
