@@ -51,6 +51,9 @@ class StepOperator(
         }
         StepManager.coroutine.launch {
             runCatching {
+                while (StepManager.isPause) {
+                    delay(200)
+                }
                 delay(delay)
                 if (isRunCoroutineIO) {
                     val nextStep = onStep(next)

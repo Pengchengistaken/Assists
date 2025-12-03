@@ -70,6 +70,12 @@ object StepManager {
         }
 
     /**
+     * 控制暂停操作的变量
+     * 当设置为true时，将暂停步骤的执行
+     */
+    var isPause = false
+
+    /**
      * 执行指定步骤
      * 
      * @param stepImpl 步骤实现类的Class对象
@@ -92,7 +98,10 @@ object StepManager {
      * @param begin 是否作为起始步骤（如果是，会重置isStop标志）
      */
     fun execute(implClassName: String, stepTag: Int, delay: Long = DEFAULT_STEP_DELAY, data: Any? = null, begin: Boolean = false) {
-        if (begin) isStop = false
+        if (begin) {
+            isStop = false
+            isPause = false
+        }
         if (isStop) return
         StringBuilder().apply {
             append("\n>>>>>>>>>>>>execute>>>>>>>>>>>")

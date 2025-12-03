@@ -58,7 +58,25 @@ object OverlayLog : AssistsServiceListener {
                     btnClean.setOnClickListener {
                         CoroutineWrapper.launch { LogWrapper.clearLog() }
                     }
-                    btnStop.setOnClickListener { StepManager.isStop = true }
+                    btnStop.setOnClickListener {
+                        if (StepManager.isPause) {
+                            StepManager.isPause = false
+                            btnStop.text = "停止"
+                            btnStop.backgroundTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#E02626"))
+                        } else {
+                            StepManager.isPause = true
+                            btnStop.text = "开始"
+                            btnStop.backgroundTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#4CAF50"))
+                        }
+                    }
+                    // Initialize state based on isPause
+                    if (StepManager.isPause) {
+                        btnStop.text = "开始"
+                        btnStop.backgroundTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#4CAF50"))
+                    } else {
+                        btnStop.text = "停止"
+                        btnStop.backgroundTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#E02626"))
+                    }
                     btnDebug.setOnClickListener {
                         Forward.toggleDebug()
                     }
