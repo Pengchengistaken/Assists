@@ -76,6 +76,26 @@ object StepManager {
     var isPause = false
 
     /**
+     * 保存最后执行的步骤信息，用于恢复执行
+     */
+    private data class LastStepInfo(
+        val implClassName: String,
+        val stepTag: Int,
+        val data: Any? = null
+    )
+    private var lastStepInfo: LastStepInfo? = null
+
+    /**
+     * 恢复执行上一个停止的步骤
+     * @return 是否成功恢复（如果没有保存的步骤信息则返回false）
+     */
+    fun resume(): Boolean {
+        val stepInfo = lastStepInfo ?: return false
+        execute(stepInfo.implClassName, stepInfo.stepTag, data = stepInfo.data, begin = true)
+        return true
+    }
+
+    /**
      * 执行指定步骤
      * 
      * @param stepImpl 步骤实现类的Class对象
@@ -103,6 +123,8 @@ object StepManager {
             isPause = false
         }
         if (isStop) return
+        // 保存当前步骤信息，用于恢复执行
+        lastStepInfo = LastStepInfo(implClassName, stepTag, data)
         StringBuilder().apply {
             append("\n>>>>>>>>>>>>execute>>>>>>>>>>>")
             append("\n${implClassName}:$stepTag")
