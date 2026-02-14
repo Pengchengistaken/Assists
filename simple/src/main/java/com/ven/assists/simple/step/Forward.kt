@@ -204,7 +204,7 @@ class Forward : StepImpl() {
      * @param delayMs 每次尝试之间的延迟时间（毫秒）
      * @return 是否成功回到微信主页面
      */
-    private suspend fun checkBackToWechatMain(maxAttempts: Int = 5, delayMs: Long = 2000): Boolean {
+    private suspend fun checkBackToWechatMain(maxAttempts: Int = 5, delayMs: Long = 1000): Boolean {
         repeat(maxAttempts) { attempt ->
             if (AssistsCore.back()) {
                 LogWrapper.logAppend("返回第 ${attempt + 1} 次")
@@ -238,7 +238,7 @@ class Forward : StepImpl() {
                 component = ComponentName("com.tencent.mm", "com.tencent.mm.ui.LauncherUI")
                 AssistsService.instance?.startActivity(this)
             }
-            return@next Step.get(StepTag.STEP_1001, delay = 2000)
+            return@next Step.get(StepTag.STEP_1001, delay = 1000)
         }
 
         //1001. 获取联系人列表
@@ -250,14 +250,14 @@ class Forward : StepImpl() {
             val contactTab = findTextViewByIdAndText(WechatResourceIds.ICON_TV, WechatResourceIds.ButtonTexts.CONTACTS)
             
             if (contactTab != null) {
-                LogWrapper.logAppend("已找到通讯录按钮，2秒后点击")
-                delay(2000)
+                LogWrapper.logAppend("已找到通讯录按钮，1秒后点击")
+                delay(1000)
                 contactTab.findFirstParentClickable()?.click()
-                return@next Step.get(StepTag.STEP_1002, delay = 2000)
+                return@next Step.get(StepTag.STEP_1002, delay = 1000)
             }
             
             LogWrapper.logAppend("未找到通讯录按钮，重试")
-            return@next Step.get(StepTag.STEP_1001, delay = 2000)
+            return@next Step.get(StepTag.STEP_1001, delay = 1000)
         }
 
         //1002. 点击群聊
@@ -268,14 +268,14 @@ class Forward : StepImpl() {
             val groupChat = findTextViewByIdAndText(WechatResourceIds.N9, WechatResourceIds.ButtonTexts.GROUP_CHAT)
             
             if (groupChat != null) {
-                LogWrapper.logAppend("已找到群聊按钮，2秒后点击")
-                delay(2000)
+                LogWrapper.logAppend("已找到群聊按钮，1秒后点击")
+                delay(1000)
                 groupChat.findFirstParentClickable()?.click()
-                return@next Step.get(StepTag.STEP_1003, delay = 2000)
+                return@next Step.get(StepTag.STEP_1003, delay = 1000)
             }
             
             LogWrapper.logAppend("未找到群聊按钮，重试")
-            return@next Step.get(StepTag.STEP_1002, delay = 2000)
+            return@next Step.get(StepTag.STEP_1002, delay = 1000)
         }
 
         //1003. 遍历群聊列表
@@ -304,7 +304,7 @@ class Forward : StepImpl() {
             
             // 返回上一页
             AssistsCore.back()
-            return@next Step.get(StepTag.STEP_1004, delay = 2000)
+            return@next Step.get(StepTag.STEP_1004, delay = 1000)
         }
 
         //1004. 点击标签
@@ -315,14 +315,14 @@ class Forward : StepImpl() {
             val tagButton = findTextViewByIdAndText(WechatResourceIds.N9, WechatResourceIds.ButtonTexts.TAG)
             
             if (tagButton != null) {
-                LogWrapper.logAppend("已找到标签按钮，2秒后点击")
-                delay(2000)
+                LogWrapper.logAppend("已找到标签按钮，1秒后点击")
+                delay(1000)
                 tagButton.findFirstParentClickable()?.click()
-                return@next Step.get(StepTag.STEP_1005, delay = 2000)
+                return@next Step.get(StepTag.STEP_1005, delay = 1000)
             }
             
             LogWrapper.logAppend("未找到标签按钮，重试")
-            return@next Step.get(StepTag.STEP_1004, delay = 2000)
+            return@next Step.get(StepTag.STEP_1004, delay = 1000)
         }
 
         //1005. 点击转发
@@ -333,14 +333,14 @@ class Forward : StepImpl() {
             val forwardButton = findTextViewByIdAndText(WechatResourceIds.HS8, WechatResourceIds.ButtonTexts.FORWARD)
             
             if (forwardButton != null) {
-                LogWrapper.logAppend("已找到转发按钮，2秒后点击")
-                delay(2000)
+                LogWrapper.logAppend("已找到转发按钮，1秒后点击")
+                delay(1000)
                 forwardButton.findFirstParentClickable()?.click()
-                return@next Step.get(StepTag.STEP_1006, delay = 2000)
+                return@next Step.get(StepTag.STEP_1006, delay = 1000)
             }
             
             LogWrapper.logAppend("未找到转发按钮，重试")
-            return@next Step.get(StepTag.STEP_1005, delay = 2000)
+            return@next Step.get(StepTag.STEP_1005, delay = 1000)
         }
 
         //1006. 获取转发页面的联系人
@@ -362,11 +362,11 @@ class Forward : StepImpl() {
             // 返回主页面
             if (checkBackToWechatMain()) {
                 LogWrapper.logAppend("已返回微信主页面")
-                return@next Step.get(StepTag.STEP_2, delay = 2000)
+                return@next Step.get(StepTag.STEP_2, delay = 1000)
             }
             
             LogWrapper.logAppend("未能返回微信主页面，重试")
-            return@next Step.get(StepTag.STEP_1006, delay = 2000)
+            return@next Step.get(StepTag.STEP_1006, delay = 1000)
         }
 
         //2. 点击聊天列表中的京东线报交流群
@@ -381,7 +381,7 @@ class Forward : StepImpl() {
                     LogWrapper.logAppend("已在微信主页面。")
                 } else {
                     LogWrapper.logAppend("未能返回微信主页面，重新启动微信。")
-                    return@next Step.get(StepTag.STEP_1, delay = 2000)
+                    return@next Step.get(StepTag.STEP_1, delay = 1000)
                 }
             }
 
@@ -420,11 +420,11 @@ class Forward : StepImpl() {
                     LogWrapper.logAppend("DEBUG 模式，跳过小红点")
                     kbqNode.findFirstParentClickable()?.click()
                     LogWrapper.logAppend("已找到并点击京东线报交流群")
-                    return@next Step.get(StepTag.STEP_3, delay = 2000)
+                    return@next Step.get(StepTag.STEP_3, delay = 1000)
                 } else if (hasAh && kbqNode != null && ht5Node != null) {
-                    LogWrapper.logAppend("京东线报交流群有新消息且包含关注的人，2分钟后点击并进入执行。")
+                    LogWrapper.logAppend("京东线报交流群有新消息且包含关注的人，1分钟后点击并进入执行。")
                     // 倒计时刷新
-                    for (secondsLeft in 120 downTo 1) {
+                    for (secondsLeft in 60 downTo 1) {
                         LogWrapper.logAppend("距离点击还有 $secondsLeft 秒...")
                         delay(1000)
                     }
@@ -437,7 +437,7 @@ class Forward : StepImpl() {
                 return@next Step.get(StepTag.STEP_2, delay = 5000)
             }
             // 倒计时刷新，加入提示每剩余多少秒
-            for (secondsLeft in 60 downTo 1) {
+            for (secondsLeft in 30 downTo 1) {
                 LogWrapper.logAppend("群里没有新消息, 距离下次检查还有 $secondsLeft 秒...")
                 delay(1000)
             }
@@ -584,15 +584,15 @@ class Forward : StepImpl() {
                         return@next Step.get(StepTag.STEP_6, delay = 3000)
                     }
                 }
-                LogWrapper.logAppend("延迟 2 秒")
-                delay(2000)
+                LogWrapper.logAppend("延迟 1 秒")
+                delay(1000)
                 if (targetImageNode.longClick()) {
                     return@next Step.get(StepTag.STEP_4, delay = 3000)
                 }
                 return@next Step.get(StepTag.STEP_3, delay = 3000)
             } else {
                 LogWrapper.logAppend("节点不可交互，isVisibleToUser=${targetImageNode.isVisibleToUser}, isLongClickable=${targetImageNode.isLongClickable}, isEnabled=${targetImageNode.isEnabled}")
-                return@next Step.get(StepTag.STEP_3, delay = 2000)
+                return@next Step.get(StepTag.STEP_3, delay = 1000)
             }
         }
 
@@ -611,15 +611,15 @@ class Forward : StepImpl() {
                 // 2. 找到可点击的父 LinearLayout
                 val clickableParent = forwardTextNode.findFirstParentClickable()
                 if (clickableParent != null) {
-                    LogWrapper.logAppend("已定位到转发按钮，2秒后点击。")
-                    return@next Step.get(StepTag.STEP_5, delay = 2000)
+                    LogWrapper.logAppend("已定位到转发按钮，1秒后点击。")
+                    return@next Step.get(StepTag.STEP_5, delay = 1000)
                 }
             }
             LogWrapper.logAppend("未找到转发按钮，重试")
             Thread.sleep(1500)
             lastImageBounds = null
             AssistsCore.back()
-            return@next Step.get(StepTag.STEP_100, delay = 2000)
+            return@next Step.get(StepTag.STEP_100, delay = 1000)
         }
 
         // STEP_5，真正执行点击
@@ -646,7 +646,7 @@ class Forward : StepImpl() {
                 Thread.sleep(1500)
                 lastImageBounds = null
                 AssistsCore.back()
-                return@next Step.get(StepTag.STEP_100, delay = 2000)
+                return@next Step.get(StepTag.STEP_100, delay = 1000)
             }
             LogWrapper.logAppend("已点击转发按钮，下一步")
             return@next Step.get(StepTag.STEP_6, delay = 3000)
@@ -664,16 +664,16 @@ class Forward : StepImpl() {
                         && it.isClickable
             }
             if (multiSelectNode != null) {
-                LogWrapper.logAppend("已定位到多选按钮，2秒后点击。")
-                delay(2000)
+                LogWrapper.logAppend("已定位到多选按钮，1秒后点击。")
+                delay(1000)
                 multiSelectNode.click()
                 LogWrapper.logAppend("已点击多选按钮")
                 resetGroupIndex() // 重置群组索引
-                return@next Step.get(StepTag.STEP_7, delay = 2000)
+                return@next Step.get(StepTag.STEP_7, delay = 1000)
             } else {
                 LogWrapper.logAppend("未找到多选按钮，重试")
                 AssistsCore.back() //返回到聊天窗口
-                return@next Step.get(StepTag.STEP_3, delay = 2000)
+                return@next Step.get(StepTag.STEP_3, delay = 1000)
             }
         }
 
@@ -691,11 +691,11 @@ class Forward : StepImpl() {
                 }
                 
                 if (fileTransferNode != null) {
-                    LogWrapper.logAppend("已找到文件传输助手，2秒后点击")
-                    delay(2000)
+                    LogWrapper.logAppend("已找到文件传输助手，1秒后点击")
+                    delay(1000)
                     fileTransferNode.findFirstParentClickable()?.click()
                     LogWrapper.logAppend("已点击文件传输助手")
-                    return@next Step.get(StepTag.STEP_9, delay = 2000)
+                    return@next Step.get(StepTag.STEP_9, delay = 1000)
                 } else {
                     LogWrapper.logAppend("未找到文件传输助手，尝试滚动列表")
                     val listContainer = AssistsCore.getAllNodes().find {
@@ -705,18 +705,18 @@ class Forward : StepImpl() {
 
                     if (listContainer != null && listContainer.scrollForward()) {
                         LogWrapper.logAppend("已滚动列表，重试选择文件传输助手")
-                        return@next Step.get(StepTag.STEP_7, delay = 2000)
+                        return@next Step.get(StepTag.STEP_7, delay = 1000)
                     }
                     
                     LogWrapper.logAppend("无法找到文件传输助手，重试")
-                    return@next Step.get(StepTag.STEP_7, delay = 2000)
+                    return@next Step.get(StepTag.STEP_7, delay = 1000)
                 }
             }
 
             // 如果已经处理完所有群组，进入下一步
             if (currentGroupIndex >= targetGroups.size) {
                 LogWrapper.logAppend("所有群组已选择完成")
-                return@next Step.get(StepTag.STEP_9, delay = 2000)
+                return@next Step.get(StepTag.STEP_9, delay = 1000)
             }
 
             // 获取当前要选择的群组名称
@@ -730,12 +730,12 @@ class Forward : StepImpl() {
             }
 
             if (groupNode != null) {
-                LogWrapper.logAppend("已定位到群组 $currentGroup，2秒后点击。")
-                delay(2000)
+                LogWrapper.logAppend("已定位到群组 $currentGroup，1秒后点击。")
+                delay(1000)
                 groupNode.findFirstParentClickable()?.click()
                 LogWrapper.logAppend("已点击群组 $currentGroup")
                 currentGroupIndex++ // 移动到下一个群组
-                return@next Step.get(StepTag.STEP_7, delay = 2000)
+                return@next Step.get(StepTag.STEP_7, delay = 1000)
             } else {
                 LogWrapper.logAppend("未找到群组 $currentGroup，尝试滚动列表")
                 val listContainer = AssistsCore.getAllNodes().find {
@@ -745,12 +745,12 @@ class Forward : StepImpl() {
 
                 if (listContainer != null && listContainer.scrollForward()) {
                     LogWrapper.logAppend("已滚动列表，重试选择群组")
-                    return@next Step.get(StepTag.STEP_7, delay = 2000)
+                    return@next Step.get(StepTag.STEP_7, delay = 1000)
                 }
                 
                 LogWrapper.logAppend("无法找到群组 $currentGroup，跳过")
                 currentGroupIndex++ // 移动到下一个群组
-                return@next Step.get(StepTag.STEP_7, delay = 2000)
+                return@next Step.get(StepTag.STEP_7, delay = 1000)
             }
         }
 
@@ -764,12 +764,12 @@ class Forward : StepImpl() {
                         && it.isClickable
             }
             if (finishBtn != null) {
-                LogWrapper.logAppend("已定位到完成按钮，2秒后点击。")
+                LogWrapper.logAppend("已定位到完成按钮，1秒后点击。")
                 resetRetryCount()
-                delay(2000)
+                delay(1000)
                 finishBtn.click()
                 LogWrapper.logAppend("已点击完成按钮")
-                return@next Step.get(StepTag.STEP_10, delay = 2000)
+                return@next Step.get(StepTag.STEP_10, delay = 1000)
             } else {
                 val currentRetry = incrementRetryCount()
                 LogWrapper.logAppend("未找到完成按钮，第 $currentRetry 次重试")
@@ -777,10 +777,10 @@ class Forward : StepImpl() {
                     LogWrapper.logAppend("重试次数超过10次，尝试返回微信主页面")
                     resetRetryCount()
                     if (checkBackToWechatMain()) {
-                        return@next Step.get(StepTag.STEP_2, delay = 2000)
+                        return@next Step.get(StepTag.STEP_2, delay = 1000)
                     }
                 }
-                return@next Step.get(StepTag.STEP_9, delay = 2000)
+                return@next Step.get(StepTag.STEP_9, delay = 1000)
             }
         }
 
@@ -794,8 +794,8 @@ class Forward : StepImpl() {
                         && it.isClickable
             }
             if (sendBtn != null) {
-                LogWrapper.logAppend("已定位到发送按钮，2秒后点击。")
-                delay(2000)
+                LogWrapper.logAppend("已定位到发送按钮，1秒后点击。")
+                delay(1000)
                 sendBtn.click()
                 if (isLastMsgText == true) {
                     LogWrapper.logAppend("isLastMsgText 为 true。")
@@ -809,11 +809,11 @@ class Forward : StepImpl() {
                     LogWrapper.logAppend("已点击发送按钮，准备查找最新文字消息")
                     delay(5000)
                     AssistsCore.back()
-                    return@next Step.get(StepTag.STEP_11, delay = 2000)
+                    return@next Step.get(StepTag.STEP_11, delay = 1000)
                 }
             } else {
                 LogWrapper.logAppend("未找到发送按钮，重试")
-                return@next Step.get(StepTag.STEP_10, delay = 2000)
+                return@next Step.get(StepTag.STEP_10, delay = 1000)
             }
         }
 
@@ -919,17 +919,17 @@ class Forward : StepImpl() {
                 Log.d("Forward", "STEP_11: 返回原因 - latestMsg为null")
                 LogWrapper.logAppend("无有效文字消息，返回。")
                 AssistsCore.back()
-                return@next Step.get(StepTag.STEP_2, delay = 2000)
+                return@next Step.get(StepTag.STEP_2, delay = 1000)
             } else if (latestMsg == lastTextMsg) {
                 Log.d("Forward", "STEP_11: 返回原因 - 消息内容未变化")
                 LogWrapper.logAppend("无有效文字消息，返回。")
                 AssistsCore.back()
-                return@next Step.get(StepTag.STEP_2, delay = 2000)
+                return@next Step.get(StepTag.STEP_2, delay = 1000)
             } else if (latestMsgIndex < latestImageIndex && latestImageIndex != -1) {
                 Log.d("Forward", "STEP_11: 返回原因 - 文字消息比图片消息旧")
                 LogWrapper.logAppend("无有效文字消息，返回。")
                 AssistsCore.back()
-                return@next Step.get(StepTag.STEP_2, delay = 2000)
+                return@next Step.get(StepTag.STEP_2, delay = 1000)
             }
 
             // 内容有变化，复制内容并处理
@@ -939,7 +939,7 @@ class Forward : StepImpl() {
             if (checkBackToWechatMain()) {
                 return@next Step.get(StepTag.STEP_12, delay = 3000)
             }
-            return@next Step.get(StepTag.STEP_12, delay = 2000)
+            return@next Step.get(StepTag.STEP_12, delay = 1000)
         }
 
         //12. 进入京粉并自动发消息
@@ -958,8 +958,8 @@ class Forward : StepImpl() {
                     it.viewIdResourceName == WechatResourceIds.KBQ && (it.text?.contains("京粉") == true)
                 }
                 if (kbqNode != null) {
-                    LogWrapper.logAppend("已找到并定位到京粉，2秒后点击。")
-                    delay(2000)
+                    LogWrapper.logAppend("已找到并定位到京粉，1秒后点击。")
+                    delay(1000)
                     kbqNode.findFirstParentClickable()?.click()
                     LogWrapper.logAppend("已找到并点击京粉")
                     return@next Step.get(StepTag.STEP_13)
@@ -974,9 +974,9 @@ class Forward : StepImpl() {
 
             if (listContainer != null && listContainer.scrollForward()) {
                 LogWrapper.logAppend("未找到京粉，向下滚动后重试")
-                return@next Step.get(StepTag.STEP_12, delay = 2000)
+                return@next Step.get(StepTag.STEP_12, delay = 1000)
             }
-            return@next Step.get(StepTag.STEP_13, delay = 2000)
+            return@next Step.get(StepTag.STEP_13, delay = 1000)
 
         }
 
@@ -991,14 +991,14 @@ class Forward : StepImpl() {
                         && it.contentDescription?.contains(WechatResourceIds.ButtonTexts.SWITCH_TO_MESSAGE) == true
             }
             if (switchMsgNode != null) {
-                LogWrapper.logAppend("已定位到切换到发消息按钮，2秒后点击。")
-                delay(2000)
+                LogWrapper.logAppend("已定位到切换到发消息按钮，1秒后点击。")
+                delay(1000)
                 switchMsgNode.click()
                 LogWrapper.logAppend("已点击切换到发消息")
-                return@next Step.get(StepTag.STEP_14, delay = 2000)
+                return@next Step.get(StepTag.STEP_14, delay = 1000)
             } else {
                 LogWrapper.logAppend("未找到切换到发消息按钮，重试")
-                return@next Step.get(StepTag.STEP_13, delay = 2000)
+                return@next Step.get(StepTag.STEP_13, delay = 1000)
             }
         }
 
@@ -1017,13 +1017,13 @@ class Forward : StepImpl() {
                     if (!ProcessedMsgText.isNullOrBlank()) {
                         editTextNode.setNodeText(ProcessedMsgText)
                         LogWrapper.logAppend("已设置文本内容")
-                        return@next Step.get(StepTag.STEP_15, delay = 2000)
+                        return@next Step.get(StepTag.STEP_15, delay = 1000)
                     }
                     LogWrapper.logAppend("文本内容为空，重试")
-                    return@next Step.get(StepTag.STEP_14, delay = 2000)
+                    return@next Step.get(StepTag.STEP_14, delay = 1000)
                 }
                 LogWrapper.logAppend("未找到输入框，重试")
-                return@next Step.get(StepTag.STEP_14, delay = 2000)
+                return@next Step.get(StepTag.STEP_14, delay = 1000)
             }
 
             // 查找输入框
@@ -1039,35 +1039,35 @@ class Forward : StepImpl() {
                 if (!ProcessedMsgText.isNullOrBlank()) {
                     editTextNode.setNodeText(ProcessedMsgText)
                     LogWrapper.logAppend("已设置文本内容")
-                    return@next Step.get(StepTag.STEP_15, delay = 2000)
+                    return@next Step.get(StepTag.STEP_15, delay = 1000)
                 }
                 LogWrapper.logAppend("文本内容为空，重试")
-                return@next Step.get(StepTag.STEP_14, delay = 2000)
+                return@next Step.get(StepTag.STEP_14, delay = 1000)
             }
 
             LogWrapper.logAppend("未找到输入框，重试")
-            return@next Step.get(StepTag.STEP_14, delay = 2000)
+            return@next Step.get(StepTag.STEP_14, delay = 1000)
         }
 
         //15. 点击发送按钮
         collector.next(StepTag.STEP_15) { step ->
             setLastStep(StepTag.STEP_15)
             LogWrapper.logAppend("STEP_15: 开始执行 - 点击发送按钮")
-            LogWrapper.logAppend("延迟 2 秒让节点加载")
-            delay(2000) //延迟 2 秒让节点加载
+            LogWrapper.logAppend("延迟 1 秒让节点加载")
+            delay(1000) //延迟 1 秒让节点加载
             val sendBtn = AssistsCore.getAllNodes().find {
                 (it.className == WechatResourceIds.NodeClasses.BUTTON || it.className == WechatResourceIds.NodeClasses.TEXT_VIEW)
                         && it.text?.contains(WechatResourceIds.ButtonTexts.SEND) == true && it.isClickable
             }
             if (sendBtn != null) {
-                LogWrapper.logAppend("已定位到发送按钮，2秒后点击。")
-                delay(2000)
+                LogWrapper.logAppend("已定位到发送按钮，1秒后点击。")
+                delay(1000)
                 sendBtn.click()
                 LogWrapper.logAppend("已点击发送按钮，进入下一步")
                 return@next Step.get(StepTag.STEP_16, delay = 5000)
             } else {
                 LogWrapper.logAppend("未找到发送按钮，重试")
-                return@next Step.get(StepTag.STEP_14, delay = 2000)
+                return@next Step.get(StepTag.STEP_14, delay = 1000)
             }
         }
 
@@ -1113,10 +1113,10 @@ class Forward : StepImpl() {
                 if (checkBackToWechatMain()) {
                     return@next Step.get(StepTag.STEP_17, delay = 3000)
                 }
-                return@next Step.get(StepTag.STEP_17, delay = 2000)
+                return@next Step.get(StepTag.STEP_17, delay = 1000)
             } else {
                 LogWrapper.logAppend("未找到京粉的文字消息，重试")
-                return@next Step.get(StepTag.STEP_16, delay = 2000)
+                return@next Step.get(StepTag.STEP_16, delay = 1000)
             }
         }
 
@@ -1141,7 +1141,7 @@ class Forward : StepImpl() {
                 }
             } else {
                 LogWrapper.logAppend("未找到顶部微信，重试")
-                return@next Step.get(StepTag.STEP_17, delay = 2000)
+                return@next Step.get(StepTag.STEP_17, delay = 1000)
             }
 
             // 2. 查找并点击"文件传输助手"
@@ -1152,14 +1152,14 @@ class Forward : StepImpl() {
             }
 
             if (fileTransferNode != null) {
-                LogWrapper.logAppend("已定位到文件传输助手，2秒后点击。")
-                delay(2000)
+                LogWrapper.logAppend("已定位到文件传输助手，1秒后点击。")
+                delay(1000)
                 fileTransferNode.findFirstParentClickable()?.click()
                 LogWrapper.logAppend("已点击文件传输助手")
-                return@next Step.get(StepTag.STEP_18, delay = 2000)
+                return@next Step.get(StepTag.STEP_18, delay = 1000)
             } else {
                 LogWrapper.logAppend("未找到文件传输助手，重试")
-                return@next Step.get(StepTag.STEP_17, delay = 2000)
+                return@next Step.get(StepTag.STEP_17, delay = 1000)
             }
         }
 
@@ -1178,7 +1178,7 @@ class Forward : StepImpl() {
                 if (!ProcessedMsgText.isNullOrBlank()) {
                     editTextNode.setNodeText(ProcessedMsgText)
                     LogWrapper.logAppend("已设置文本内容。")
-                    delay(2000)
+                    delay(1000)
                 }
                     // 4. 查找并点击发送按钮
                     val sendBtn = AssistsCore.getAllNodes().find {
@@ -1186,18 +1186,18 @@ class Forward : StepImpl() {
                                 && it.text?.contains(WechatResourceIds.ButtonTexts.SEND) == true && it.isClickable
                     }
                     if (sendBtn != null) {
-                        LogWrapper.logAppend("已定位到发送按钮，2秒后点击。")
-                        delay(2000)
+                        LogWrapper.logAppend("已定位到发送按钮，1秒后点击。")
+                        delay(1000)
                         sendBtn.click()
                         LogWrapper.logAppend("已点击发送按钮，完成所有步骤")
-                        return@next Step.get(StepTag.STEP_19, delay = 2000)
+                        return@next Step.get(StepTag.STEP_19, delay = 1000)
                     } else {
                         LogWrapper.logAppend("未找到发送按钮，重试")
-                        return@next Step.get(StepTag.STEP_18, delay = 2000)
+                        return@next Step.get(StepTag.STEP_18, delay = 1000)
                     }
             } else {
                 LogWrapper.logAppend("未找到输入框，重试")
-                return@next Step.get(StepTag.STEP_18, delay = 2000)
+                return@next Step.get(StepTag.STEP_18, delay = 1000)
             }
         }
 
@@ -1211,9 +1211,9 @@ class Forward : StepImpl() {
                 LogWrapper.logAppend("STEP_19重试超过${maxRetry}次，返回微信主页面并重置计数")
                 resetRetryCount()
                 if (checkBackToWechatMain()) {
-                    return@next Step.get(StepTag.STEP_2, delay = 2000)
+                    return@next Step.get(StepTag.STEP_2, delay = 1000)
                 } else {
-                    return@next Step.get(StepTag.STEP_1, delay = 2000)
+                    return@next Step.get(StepTag.STEP_1, delay = 1000)
                 }
             }
             retryCount++
@@ -1231,7 +1231,7 @@ class Forward : StepImpl() {
             
             if (longClickableTextNodes.isEmpty()) {
                 LogWrapper.logAppend("未找到可长按的文字区域，重试")
-                return@next Step.get(StepTag.STEP_19, delay = 2000)
+                return@next Step.get(StepTag.STEP_19, delay = 1000)
             }
             
             // 长按最后一个文字节点（最新的消息）
@@ -1274,7 +1274,7 @@ class Forward : StepImpl() {
                                 ProcessedMsgText = null
                                 LogWrapper.logAppend("设置 ProcessedMsgText 为 null")
                                 resetRetryCount()
-                                return@next Step.get(StepTag.STEP_6, delay = 2000)
+                                return@next Step.get(StepTag.STEP_6, delay = 1000)
                             } else {
                                 LogWrapper.logAppend("点击分享按钮失败")
                             }
@@ -1286,18 +1286,18 @@ class Forward : StepImpl() {
                         LogWrapper.logAppend("查找分享按钮失败，重试")
                         // 点击返回按钮或空白区域退出全屏
                         AssistsCore.gestureClick(50f, 155f)
-                        return@next Step.get(StepTag.STEP_19, delay = 2000)
+                        return@next Step.get(StepTag.STEP_19, delay = 1000)
                     } else {
                         LogWrapper.logAppend("第二次点击失败，重试")
-                        return@next Step.get(StepTag.STEP_19, delay = 2000)
+                        return@next Step.get(StepTag.STEP_19, delay = 1000)
                     }
                 } else {
                     LogWrapper.logAppend("第一次点击失败，重试")
-                    return@next Step.get(StepTag.STEP_19, delay = 2000)
+                    return@next Step.get(StepTag.STEP_19, delay = 1000)
                 }
             } else {
                 LogWrapper.logAppend("无法获取文字节点边界，重试")
-                return@next Step.get(StepTag.STEP_19, delay = 2000)
+                return@next Step.get(StepTag.STEP_19, delay = 1000)
             }
         }
 
@@ -1318,16 +1318,16 @@ class Forward : StepImpl() {
                 delay(100)
                 parent.click()
                 LogWrapper.logAppend("已双击顶部微信，成功返回主页面")
-                return@next Step.get(StepTag.STEP_2, delay = 2000)
+                return@next Step.get(StepTag.STEP_2, delay = 1000)
             }
 
             // 2. 如果没找到顶部微信，尝试多次返回
             if (checkBackToWechatMain(10)) {
-                return@next Step.get(StepTag.STEP_2, delay = 2000)
+                return@next Step.get(StepTag.STEP_2, delay = 1000)
             }
 
             LogWrapper.logAppend("未能返回微信主页面，重新启动微信")
-            return@next Step.get(StepTag.STEP_1, delay = 2000)
+            return@next Step.get(StepTag.STEP_1, delay = 1000)
         }
     }
 }
