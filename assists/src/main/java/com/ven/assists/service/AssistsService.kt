@@ -1,7 +1,9 @@
 package com.ven.assists.service
 
 import android.accessibilityservice.AccessibilityService
+import android.content.Context
 import android.content.Intent
+import android.os.PowerManager
 import android.view.accessibility.AccessibilityEvent
 import com.blankj.utilcode.util.LogUtils
 import com.ven.assists.AssistsCore
@@ -18,6 +20,8 @@ import java.util.Collections
  * 提供全局服务实例访问和监听器管理功能
  */
 open class AssistsService : AccessibilityService() {
+    private var screenWakeLock: PowerManager.WakeLock? = null
+
     companion object {
         /**
          * 全局服务实例
@@ -59,6 +63,11 @@ open class AssistsService : AccessibilityService() {
         instance = this
         AssistsWindowManager.init(this)
         runCatching { listeners.forEach { it.onServiceConnected(this) } }
+        runCatching {
+            screenWakeLock = (getSystemService(Context.POWER_SERVICE) as PowerManager)
+                .newWakeLock(PowerManager.SCREEN_BRIGHT_WAKE_LOCK, "Assists:KeepScreenOn")
+            screenWakeLock?.acquire()
+        }
         LogUtils.d(AssistsCore.LOG_TAG, "assists service on service connected")
     }
 
@@ -79,6 +88,10 @@ open class AssistsService : AccessibilityService() {
      * @return 是否调用父类的onUnbind方法
      */
     override fun onUnbind(intent: Intent?): Boolean {
+        runCatching {
+            screenWakeLock?.release()
+            screenWakeLock = null
+        }
         instance = null
         runCatching { listeners.forEach { it.onUnbind() } }
         return super.onUnbind(intent)
@@ -90,5 +103,13 @@ open class AssistsService : AccessibilityService() {
      */
     override fun onInterrupt() {
         runCatching { listeners.forEach { it.onInterrupt() } }
+    }
+
+    override fun onDestroy() {
+        runCatching {
+            screenWakeLock?.release()
+            screenWakeLock = null
+        }
+        super.onDestroy()
     }
 }
