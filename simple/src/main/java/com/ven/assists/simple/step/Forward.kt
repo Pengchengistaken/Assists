@@ -36,6 +36,7 @@ class Forward : StepImpl() {
         private var lastMessageTime: String? = null // 记录上一条消息的时间
         private var pendingMessageTime: String? = null // 待确认的消息时间，转发成功后再写入 lastMessageTime
         private var retryCount: Int = 0 // 记录重试次数
+        private const val MAX_RETRY_FIND_INPUT = 20 // 未找到输入框/文本为空时的最大重试次数
         private var currentGroupIndex: Int = 0 // 当前处理的群组索引
         private val targetGroups = mutableSetOf(
             "文件传输助手"
@@ -120,6 +121,27 @@ class Forward : StepImpl() {
             it.className == WechatResourceIds.NodeClasses.LIST_VIEW &&
             it.viewIdResourceName == viewId
         }
+    }
+
+    /**
+     * 带延迟重试的输入框查找，应对界面未加载完或节点树快照未刷新的情况。
+     * @param maxAttempts 最多尝试次数（含首次）
+     * @param delayMs 每次尝试间隔毫秒数
+     */
+    private suspend fun findInputBoxWithRetry(
+        maxAttempts: Int = 3,
+        delayMs: Long = 500
+    ): android.view.accessibility.AccessibilityNodeInfo? {
+        repeat(maxAttempts) { attempt ->
+            val node = AssistsCore.getAllNodes().find {
+                it.className == WechatResourceIds.NodeClasses.EDIT_TEXT
+                    && it.viewIdResourceName == WechatResourceIds.BKK
+                    && it.isClickable && it.isEnabled && it.isFocusable
+            }
+            if (node != null) return node
+            if (attempt < maxAttempts - 1) delay(delayMs)
+        }
+        return null
     }
 
     /**
@@ -1015,14 +1037,11 @@ class Forward : StepImpl() {
 
         //14. 点击输入框并设置文本内容
         collector.next(StepTag.STEP_14) { step ->
+            if (lastStep != StepTag.STEP_14) resetRetryCount()
             setLastStep(StepTag.STEP_14)
             LogWrapper.logAppend("STEP_14: 开始执行 - 点击输入框并设置文本内容")
             if (lastStep == StepTag.STEP_15) {
-                val editTextNode = AssistsCore.getAllNodes().find {
-                    it.className == WechatResourceIds.NodeClasses.EDIT_TEXT
-                            && it.viewIdResourceName == WechatResourceIds.BKK
-                            && it.isClickable && it.isEnabled && it.isFocusable
-                }
+                val editTextNode = findInputBoxWithRetry()
 
                 if (editTextNode != null) {
                     if (!ProcessedMsgText.isNullOrBlank()) {
@@ -1031,18 +1050,28 @@ class Forward : StepImpl() {
                         return@next Step.get(StepTag.STEP_15, delay = 2000)
                     }
                     LogWrapper.logAppend("文本内容为空，重试")
+                    incrementRetryCount()
+                    if (retryCount >= MAX_RETRY_FIND_INPUT) {
+                        LogWrapper.logAppend("STEP_14 未找到输入框重试超过${MAX_RETRY_FIND_INPUT}次，返回主流程")
+                        resetRetryCount()
+                        if (checkBackToWechatMain()) return@next Step.get(StepTag.STEP_2, delay = 2000)
+                        else return@next Step.get(StepTag.STEP_1, delay = 2000)
+                    }
                     return@next Step.get(StepTag.STEP_14, delay = 2000)
                 }
                 LogWrapper.logAppend("未找到输入框，重试")
+                incrementRetryCount()
+                if (retryCount >= MAX_RETRY_FIND_INPUT) {
+                    LogWrapper.logAppend("STEP_14 未找到输入框重试超过${MAX_RETRY_FIND_INPUT}次，返回主流程")
+                    resetRetryCount()
+                    if (checkBackToWechatMain()) return@next Step.get(StepTag.STEP_2, delay = 2000)
+                    else return@next Step.get(StepTag.STEP_1, delay = 2000)
+                }
                 return@next Step.get(StepTag.STEP_14, delay = 2000)
             }
 
-            // 查找输入框
-            val editTextNode = AssistsCore.getAllNodes().find {
-                it.className == WechatResourceIds.NodeClasses.EDIT_TEXT
-                        && it.viewIdResourceName == WechatResourceIds.BKK
-                        && it.isClickable && it.isEnabled && it.isFocusable
-            }
+            // 查找输入框（带延迟重试，应对界面未加载或节点树未刷新）
+            val editTextNode = findInputBoxWithRetry()
 
             if (editTextNode != null) {
                 LogWrapper.logAppend("已定位到输入框。")
@@ -1053,10 +1082,24 @@ class Forward : StepImpl() {
                     return@next Step.get(StepTag.STEP_15, delay = 2000)
                 }
                 LogWrapper.logAppend("文本内容为空，重试")
+                incrementRetryCount()
+                if (retryCount >= MAX_RETRY_FIND_INPUT) {
+                    LogWrapper.logAppend("STEP_14 未找到输入框重试超过${MAX_RETRY_FIND_INPUT}次，返回主流程")
+                    resetRetryCount()
+                    if (checkBackToWechatMain()) return@next Step.get(StepTag.STEP_2, delay = 2000)
+                    else return@next Step.get(StepTag.STEP_1, delay = 2000)
+                }
                 return@next Step.get(StepTag.STEP_14, delay = 2000)
             }
 
             LogWrapper.logAppend("未找到输入框，重试")
+            incrementRetryCount()
+            if (retryCount >= MAX_RETRY_FIND_INPUT) {
+                LogWrapper.logAppend("STEP_14 未找到输入框重试超过${MAX_RETRY_FIND_INPUT}次，返回主流程")
+                resetRetryCount()
+                if (checkBackToWechatMain()) return@next Step.get(StepTag.STEP_2, delay = 2000)
+                else return@next Step.get(StepTag.STEP_1, delay = 2000)
+            }
             return@next Step.get(StepTag.STEP_14, delay = 2000)
         }
 
@@ -1176,14 +1219,11 @@ class Forward : StepImpl() {
 
         //18. 在文件传输助手中粘贴内容并发送
         collector.next(StepTag.STEP_18) { step ->
+            if (lastStep != StepTag.STEP_18) resetRetryCount()
             setLastStep(StepTag.STEP_18)
             LogWrapper.logAppend("STEP_18: 开始执行 - 在文件传输助手中粘贴内容并发送")
-            // 1. 查找输入框
-            val editTextNode = AssistsCore.getAllNodes().find {
-                it.className == WechatResourceIds.NodeClasses.EDIT_TEXT
-                        && it.viewIdResourceName == WechatResourceIds.BKK
-                        && it.isClickable && it.isEnabled && it.isFocusable
-            }
+            // 1. 查找输入框（带延迟重试，应对界面未加载或节点树未刷新）
+            val editTextNode = findInputBoxWithRetry()
 
             if (editTextNode != null) {
                 if (!ProcessedMsgText.isNullOrBlank()) {
@@ -1208,6 +1248,13 @@ class Forward : StepImpl() {
                     }
             } else {
                 LogWrapper.logAppend("未找到输入框，重试")
+                incrementRetryCount()
+                if (retryCount >= MAX_RETRY_FIND_INPUT) {
+                    LogWrapper.logAppend("STEP_18 未找到输入框重试超过${MAX_RETRY_FIND_INPUT}次，返回主流程")
+                    resetRetryCount()
+                    if (checkBackToWechatMain()) return@next Step.get(StepTag.STEP_2, delay = 2000)
+                    else return@next Step.get(StepTag.STEP_1, delay = 2000)
+                }
                 return@next Step.get(StepTag.STEP_18, delay = 2000)
             }
         }
@@ -1217,9 +1264,8 @@ class Forward : StepImpl() {
             setLastStep(StepTag.STEP_19)
             LogWrapper.logAppend("STEP_19: 开始执行 - 长按文字区域并查找转发按钮")
             // 增加重试计数
-            val maxRetry = 20
-            if (retryCount >= maxRetry) {
-                LogWrapper.logAppend("STEP_19重试超过${maxRetry}次，返回微信主页面并重置计数")
+            if (retryCount >= MAX_RETRY_FIND_INPUT) {
+                LogWrapper.logAppend("STEP_19重试超过${MAX_RETRY_FIND_INPUT}次，返回微信主页面并重置计数")
                 resetRetryCount()
                 if (checkBackToWechatMain()) {
                     return@next Step.get(StepTag.STEP_2, delay = 2000)
