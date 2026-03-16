@@ -150,6 +150,23 @@ dependencies {
 3. 如遇到异常，系统会自动尝试恢复
 4. 请勿频繁切换应用，以免影响服务运行
 
+# 小米/MIUI 设备：应用自动停止
+
+在小米/MIUI 设备上，Assists 可能被系统的 **AutoPowerKill（自动省电杀进程）** 强制结束，表现为应用突然停止运行而非崩溃。
+
+**排查方式**（使用 adb logcat）：
+```
+adb logcat -d | grep -E "autoKillApp|AutoPowerKill|com.ven.assists"
+```
+
+若看到 `AutoPowerKill: kill com.ven.assists.demo`，说明是被系统省电策略杀掉。
+
+**解决方案**（在手机上设置）：
+1. **关闭省电限制**：设置 → 应用设置 → 应用管理 → Assists → 省电策略 → 选择「无限制」
+2. **允许自启动**：设置 → 应用设置 → 应用管理 → 更多 → 自启动管理 → 开启 Assists 自启动
+3. **关闭后台限制**：设置 → 应用设置 → Assists → 省电与耗电 → 选择「无限制」
+4. **锁定后台**（可选）：多任务界面中锁定 Assists，降低被系统清理的概率
+
 # 使用Appium获取节点
 参考：https://juejin.cn/post/7483409317564907530
 
