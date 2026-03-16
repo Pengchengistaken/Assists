@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Blue rounded rectangle background (no surrounding white) -->
+    <path
+        android:fillColor="#4272D7"
+        android:pathData="M10,28C10,18.06 18.06,10 28,10h52c9.94,0 18,8.06 18,18v52c0,9.94 -8.06,18 -18,18H28c-9.94,0 -18,-8.06 -18,-18V28z" />
+
+    <!-- Monitor body (outer white rounded rect) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M30,36c0,-2.2 1.8,-4 4,-4h40c2.2,0 4,1.8 4,4v24c0,2.2 -1.8,4 -4,4H34c-2.2,0 -4,-1.8 -4,-4V36z" />
+
+    <!-- Monitor screen (inner blue fill) -->
+    <path
+        android:fillColor="#4272D7"
+        android:pathData="M34,38h40v20H34V38z" />
+
+    <!-- Monitor stand -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M48,64h12v4H48V64zM44,68h20v4H44V68z" />
+
+    <!-- Upload arrow on screen -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,42l-8,8h5v7h6v-7h5L54,42z" />
+
+</vector>

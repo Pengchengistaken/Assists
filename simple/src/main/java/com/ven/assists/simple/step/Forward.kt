@@ -34,6 +34,7 @@ class Forward : StepImpl() {
         private var lastStep: Int? = 0 // 记录最后执行的步骤
         private var ProcessedMsgText: String? = null // 记录全局内容
         private var lastMessageTime: String? = null // 记录上一条消息的时间
+        private var pendingMessageTime: String? = null // 待确认的消息时间，转发成功后再写入 lastMessageTime
         private var retryCount: Int = 0 // 记录重试次数
         private var currentGroupIndex: Int = 0 // 当前处理的群组索引
         private val targetGroups = mutableSetOf(
@@ -62,6 +63,11 @@ class Forward : StepImpl() {
 
         private fun resetGroupIndex() {
             currentGroupIndex = 0
+        }
+
+        private fun confirmMessageTime() {
+            pendingMessageTime?.let { lastMessageTime = it }
+            pendingMessageTime = null
         }
     }
 
@@ -128,7 +134,6 @@ class Forward : StepImpl() {
         if (currentTime == null) {
             LogWrapper.logAppend("当前消息时间为 null，可能是界面没有时间的节点信息。")
             LogWrapper.logAppend("当做是新消息来处理。")
-            lastMessageTime = currentTime // 更新历史时间
             return true
         }
         
@@ -138,8 +143,7 @@ class Forward : StepImpl() {
             return false
         }
         
-        // 时间戳不同，表示有新消息，更新历史时间并返回true
-        lastMessageTime = currentTime
+        // 时间戳不同，表示有新消息，返回true（不在此处更新 lastMessageTime，由 confirmMessageTime 在发送成功后更新）
         LogWrapper.logAppend("消息时间已变化")
         return true
     }
@@ -560,6 +564,8 @@ class Forward : StepImpl() {
                 if (checkBackToWechatMain()) {
                     LogWrapper.logAppend("返回微信主页面，30秒后重试。")
                     return@next Step.get(StepTag.STEP_2, delay = 30000)
+                } else {
+                    return@next Step.get(StepTag.STEP_2, delay = 30000)
                 }
             }
 
@@ -569,8 +575,12 @@ class Forward : StepImpl() {
                 if (checkBackToWechatMain()) {
                     LogWrapper.logAppend("返回微信主页面，30秒后重试。")
                     return@next Step.get(StepTag.STEP_2, delay = 30000)
+                } else {
+                    return@next Step.get(StepTag.STEP_2, delay = 30000)
                 }
             }
+
+            pendingMessageTime = currentMessageTime
 
             // 4. 点击图片
             if (targetImageNode?.isVisibleToUser!! && targetImageNode.isLongClickable && targetImageNode.isEnabled) {
@@ -797,6 +807,7 @@ class Forward : StepImpl() {
                 LogWrapper.logAppend("已定位到发送按钮，2秒后点击。")
                 delay(2000)
                 sendBtn.click()
+                confirmMessageTime()
                 if (isLastMsgText == true) {
                     LogWrapper.logAppend("isLastMsgText 为 true。")
                     LogWrapper.logAppend("已点击发送按钮，准备查找最新图片消息")
