@@ -36,6 +36,7 @@ class Forward : StepImpl() {
         private var lastMessageTime: String? = null // 记录上一条消息的时间
         private var pendingMessageTime: String? = null // 待确认的消息时间，转发成功后再写入 lastMessageTime
         private var retryCount: Int = 0 // 记录重试次数
+        private var step11EmptyBlockRetry: Int = 0 // STEP_11 消息块为空时的重试次数
         private const val MAX_RETRY_FIND_INPUT = 20 // 未找到输入框/文本为空时的最大重试次数
         private var currentGroupIndex: Int = 0 // 当前处理的群组索引
         private val targetGroups = mutableSetOf(
@@ -56,6 +57,10 @@ class Forward : StepImpl() {
 
         private fun resetRetryCount() {
             retryCount = 0
+        }
+
+        private fun resetStep11EmptyRetry() {
+            step11EmptyBlockRetry = 0
         }
 
         private fun incrementRetryCount(): Int {
@@ -203,6 +208,93 @@ class Forward : StepImpl() {
     private fun normalizeText(text: String): String {
         // 将全角 @ (＠) 转换为半角 @
         return text.replace("＠", "@")
+    }
+
+    /** 排除气泡内时间标签等短串，避免被当成昵称/正文 */
+    private fun isLikelyChatTimeLabel(text: String): Boolean {
+        val t = text.trim()
+        if (t.length > 12) return false
+        if (t.matches(Regex("^(上午|下午|昨天|星期|周)[^\\n]{0,8}$"))) return true
+        return t.matches(Regex("^[\\d:：\\s上午下午晚早中-]+$"))
+    }
+
+    /**
+     * 在单条消息块内查找线报员发送者节点。优先 `brc`；部分微信版本昵称行资源 id 会变化，则回退为「含昵称且较短」的 TextView。
+     */
+    private fun findLineReporterSenderInBlock(
+        msgBlock: android.view.accessibility.AccessibilityNodeInfo
+    ): android.view.accessibility.AccessibilityNodeInfo? {
+        val nodes = msgBlock.getNodes()
+        val strict = nodes.find { node ->
+            node.className == WechatResourceIds.NodeClasses.TEXT_VIEW
+                && node.viewIdResourceName == WechatResourceIds.BRC
+                && ContactList.sourceRobotNames.any { robotName ->
+                    val nt = node.text?.toString()?.let { normalizeText(it) } ?: ""
+                    nt.contains(normalizeText(robotName))
+                }
+        }
+        if (strict != null) return strict
+
+        val loose = nodes
+            .filter {
+                it.className == WechatResourceIds.NodeClasses.TEXT_VIEW
+                    && !it.text.isNullOrBlank()
+                    && it.viewIdResourceName != WechatResourceIds.BR1
+            }
+            .mapNotNull { node ->
+                val raw = node.text?.toString()?.trim().orEmpty()
+                if (isLikelyChatTimeLabel(raw)) return@mapNotNull null
+                val nt = normalizeText(raw)
+                if (ContactList.sourceRobotNames.none { rn -> nt.contains(normalizeText(rn)) }) return@mapNotNull null
+                node to raw.length
+            }
+        // 昵称行通常比正文短；取最短匹配减少误把正文当头衔
+        return loose.minByOrNull { it.second }?.first
+    }
+
+    /**
+     * 在线报员消息块中解析正文 TextView。优先 [WechatResourceIds.BKL]；其次可长按正文（与 STEP_19 一致）；再回退为最长正文候选。
+     */
+    private fun findRobotMessageBodyText(
+        msgBlock: android.view.accessibility.AccessibilityNodeInfo,
+        senderNode: android.view.accessibility.AccessibilityNodeInfo?
+    ): android.view.accessibility.AccessibilityNodeInfo? {
+        val nodes = msgBlock.getNodes()
+        nodes.find {
+            it.className == WechatResourceIds.NodeClasses.TEXT_VIEW
+                && it.viewIdResourceName == WechatResourceIds.BKL
+                && !it.text.isNullOrBlank()
+        }?.let { return it }
+
+        val senderNorm = senderNode?.text?.toString()?.let { normalizeText(it.trim()) }.orEmpty()
+        val excludedIds = setOf(
+            WechatResourceIds.BRC,
+            WechatResourceIds.BR1,
+            WechatResourceIds.HT5,
+            WechatResourceIds.A_H,
+        )
+
+        fun isBodyCandidate(cand: android.view.accessibility.AccessibilityNodeInfo): Boolean {
+            if (cand.className != WechatResourceIds.NodeClasses.TEXT_VIEW) return false
+            if (cand.viewIdResourceName in excludedIds) return false
+            val raw = cand.text?.toString()?.trim().orEmpty()
+            if (raw.length < 2) return false
+            if (isLikelyChatTimeLabel(raw)) return false
+            val norm = normalizeText(raw)
+            if (senderNorm.isNotEmpty() && norm == senderNorm) return false
+            return true
+        }
+
+        // 微信里气泡正文常为可长按 TextView（与 STEP_19 长按转发一致）
+        val longClickBodies = nodes.filter { it.isLongClickable && isBodyCandidate(it) }
+        longClickBodies.maxByOrNull { it.text?.length ?: 0 }?.let { return it }
+
+        val scored = nodes.mapNotNull { cand ->
+            if (!isBodyCandidate(cand)) return@mapNotNull null
+            val raw = cand.text?.toString()?.trim().orEmpty()
+            cand to raw.length
+        }
+        return scored.maxByOrNull { it.second }?.first
     }
 
     /**
@@ -854,8 +946,72 @@ class Forward : StepImpl() {
         collector.next(StepTag.STEP_11) { step ->
             setLastStep(StepTag.STEP_11)
             LogWrapper.logAppend("STEP_11: 开始执行 - 查找线报员最新文字消息")
-            val allMsgBlocks = AssistsCore.getAllNodes().filter {
-                it.className == WechatResourceIds.NodeClasses.RELATIVE_LAYOUT && it.viewIdResourceName == WechatResourceIds.BN1
+            fun collectMsgBlocks(): List<android.view.accessibility.AccessibilityNodeInfo> {
+                return AssistsCore.getAllNodes().filter {
+                    it.className == WechatResourceIds.NodeClasses.RELATIVE_LAYOUT && it.viewIdResourceName == WechatResourceIds.BN1
+                }
+            }
+            fun tryEnterSourceChatFromChatList(): Boolean {
+                // 会话列表每行 LinearLayout(cj0) 下通常有群名 TextView(kbq)
+                val rows = AssistsCore.getAllNodes().filter {
+                    it.className == WechatResourceIds.NodeClasses.LINEAR_LAYOUT && it.viewIdResourceName == WechatResourceIds.CJ0
+                }
+                if (rows.isEmpty()) return false
+                val targetName = ContactList.sourceGroupName
+                for (row in rows) {
+                    val kbq = row.getNodes().find { it.viewIdResourceName == WechatResourceIds.KBQ }
+                    if (kbq?.text?.toString()?.contains(targetName) == true) {
+                        LogWrapper.logAppend("STEP_11: 在会话列表找到线报群「$targetName」，点击进入")
+                        kbq.findFirstParentClickable()?.click()
+                        return true
+                    }
+                }
+                return false
+            }
+
+            var allMsgBlocks = collectMsgBlocks()
+            var waitRound = 0
+            while (allMsgBlocks.isEmpty() && waitRound < 6) {
+                waitRound++
+                LogWrapper.logAppend("STEP_11: 未拿到消息块，等待聊天页就绪 ($waitRound/6)")
+                delay(700)
+                allMsgBlocks = collectMsgBlocks()
+            }
+
+            if (allMsgBlocks.isEmpty()) {
+                // 关键兜底：此时多半不在聊天消息页（刚从转发/发送返回），需要 back 或重新进群再解析
+                step11EmptyBlockRetry++
+                val pkg = AssistsCore.getPackageName()
+                Log.d("Forward", "STEP_11: 消息块仍为空，package=$pkg, retry=$step11EmptyBlockRetry")
+
+                // 如果不在微信，说明返回键把微信退到桌面/其它App了，直接重启微信主流程
+                if (pkg.isNotBlank() && pkg != "com.tencent.mm") {
+                    LogWrapper.logAppend("STEP_11: 当前不在微信（$pkg），重新启动微信")
+                    resetStep11EmptyRetry()
+                    return@next Step.get(StepTag.STEP_1, delay = 1500)
+                }
+
+                // 在微信内但列表为空：优先尝试回到会话列表并进入线报群，再读取消息块
+                LogWrapper.logAppend("STEP_11: 微信内未拿到消息列表，尝试回到线报群后重试（$step11EmptyBlockRetry）")
+                if (tryEnterSourceChatFromChatList()) {
+                    delay(1200)
+                    return@next Step.get(StepTag.STEP_11, delay = 1000)
+                }
+                // 如果不在会话列表，轻量 back 一次（只一次）尝试回到会话列表
+                if (step11EmptyBlockRetry <= 2) {
+                    AssistsCore.back()
+                    return@next Step.get(StepTag.STEP_11, delay = 1600)
+                }
+
+                // 多次失败后，回到微信主页面重新进入群聊再走后续流程
+                resetStep11EmptyRetry()
+                if (checkBackToWechatMain()) {
+                    return@next Step.get(StepTag.STEP_2, delay = 1500)
+                }
+                return@next Step.get(StepTag.STEP_1, delay = 1500)
+            } else {
+                // 一旦拿到消息块，重置兜底计数
+                resetStep11EmptyRetry()
             }
             
             Log.d("Forward", "STEP_11: 找到消息块数量: ${allMsgBlocks.size}")
@@ -864,58 +1020,33 @@ class Forward : StepImpl() {
             var latestMsg: String? = null
             var latestMsgNode: android.view.accessibility.AccessibilityNodeInfo? = null
             var latestMsgIndex = -1
-            var latestImageIndex = -1
+            /** 仅统计线报员消息块内的图片，避免群内其他人发图导致误判「文字比图片旧」 */
+            var latestRobotImageIndex = -1
 
             // 倒序遍历，优先取最新
             for ((i, msgBlock) in allMsgBlocks.withIndex().reversed()) {
                 Log.d("Forward", "STEP_11: 检查消息块[$i]")
                 
-                // 1. 查找发送者节点
-                val senderNode = msgBlock.getNodes().find { node ->
-                    val nodeText = node.text?.toString()
-                    val normalizedNodeText = nodeText?.let { normalizeText(it) }
-                    val containsRobotName = ContactList.sourceRobotNames.any { robotName -> 
-                        val normalizedRobotName = normalizeText(robotName)
-                        val matched = normalizedNodeText?.contains(normalizedRobotName) == true
-                        if (node.className == WechatResourceIds.NodeClasses.TEXT_VIEW && node.viewIdResourceName == WechatResourceIds.BRC) {
-                            Log.d("Forward", "STEP_11: 检查节点: text=$nodeText, normalizedText=$normalizedNodeText, robotName=$robotName, normalizedRobotName=$normalizedRobotName, matched=$matched")
-                        }
-                        matched
-                    }
-                    if (containsRobotName && node.className == WechatResourceIds.NodeClasses.TEXT_VIEW && node.viewIdResourceName == WechatResourceIds.BRC) {
-                        val matchedName = ContactList.sourceRobotNames.find { robotName -> 
-                            val normalizedRobotName = normalizeText(robotName)
-                            normalizedNodeText?.contains(normalizedRobotName) == true
-                        }
-                        Log.d("Forward", "STEP_11: 找到匹配的线报员节点: text=$nodeText, robotName=$matchedName")
-                    }
-                    node.className == WechatResourceIds.NodeClasses.TEXT_VIEW
-                            && node.viewIdResourceName == WechatResourceIds.BRC
-                            && containsRobotName
-                }
+                // 1. 发送者：brc 或昵称资源 id 变化时的回退
+                val senderNode = findLineReporterSenderInBlock(msgBlock)
                 
                 if (senderNode != null) {
                     Log.d("Forward", "STEP_11: 找到线报员消息，发送者: ${senderNode.text}")
-                }
 
-                // 2. 查找图片节点
-                val imageNode = msgBlock.getNodes().find {
-                    it.viewIdResourceName == WechatResourceIds.BKO
-                }
-                if (latestImageIndex == -1 && imageNode != null) {
-                    latestImageIndex = i
-                    Log.d("Forward", "STEP_11: 找到图片消息，索引: $i")
-                }
-
-                // 3. 如果找到线报员的消息，再查找文字内容节点
-                if (senderNode != null) {
-                    Log.d("Forward", "STEP_11: 在线报员消息中查找文字内容")
-                    val contentNode = msgBlock.getNodes().find {
-                        it.className == WechatResourceIds.NodeClasses.TEXT_VIEW
-                                && it.viewIdResourceName == WechatResourceIds.BKL
-                                && !it.text.isNullOrBlank()
+                    // 2. 仅线报员块内的图片（与 STEP_3 一致：BKG 优先于 BKO）
+                    val imageNode = msgBlock.getNodes().find {
+                        it.viewIdResourceName == WechatResourceIds.BKG
+                    } ?: msgBlock.getNodes().find {
+                        it.viewIdResourceName == WechatResourceIds.BKO
                     }
-                    
+                    if (latestRobotImageIndex == -1 && imageNode != null) {
+                        latestRobotImageIndex = i
+                        Log.d("Forward", "STEP_11: 线报员图片消息，索引: $i")
+                    }
+
+                    // 3. 正文：BKL 或资源 id 变更时的回退解析
+                    Log.d("Forward", "STEP_11: 在线报员消息中查找文字内容")
+                    val contentNode = findRobotMessageBodyText(msgBlock, senderNode)
                     if (contentNode != null) {
                         Log.d("Forward", "STEP_11: 找到文字内容: ${contentNode.text}")
                         if (latestMsgIndex == -1) {
@@ -941,26 +1072,26 @@ class Forward : StepImpl() {
             Log.d("Forward", "  latestMsg: $latestMsg")
             Log.d("Forward", "  lastTextMsg: $lastTextMsg")
             Log.d("Forward", "  latestMsgIndex: $latestMsgIndex")
-            Log.d("Forward", "  latestImageIndex: $latestImageIndex")
+            Log.d("Forward", "  latestRobotImageIndex: $latestRobotImageIndex")
             Log.d("Forward", "  latestMsg == null: ${latestMsg == null}")
             Log.d("Forward", "  latestMsg == lastTextMsg: ${latestMsg == lastTextMsg}")
-            Log.d("Forward", "  latestMsgIndex < latestImageIndex: ${latestMsgIndex < latestImageIndex}")
-            Log.d("Forward", "  latestImageIndex != -1: ${latestImageIndex != -1}")
-            Log.d("Forward", "  (latestMsgIndex < latestImageIndex && latestImageIndex != -1): ${latestMsgIndex < latestImageIndex && latestImageIndex != -1}")
+            Log.d("Forward", "  latestMsgIndex < latestRobotImageIndex: ${latestMsgIndex < latestRobotImageIndex}")
+            Log.d("Forward", "  latestRobotImageIndex != -1: ${latestRobotImageIndex != -1}")
+            Log.d("Forward", "  (latestMsgIndex < latestRobotImageIndex && latestRobotImageIndex != -1): ${latestMsgIndex < latestRobotImageIndex && latestRobotImageIndex != -1}")
             
             if (latestMsg == null) {
                 Log.d("Forward", "STEP_11: 返回原因 - latestMsg为null")
-                LogWrapper.logAppend("无有效文字消息，返回。")
+                LogWrapper.logAppend("未解析到线报员文字正文，返回。")
                 AssistsCore.back()
                 return@next Step.get(StepTag.STEP_2, delay = 1000)
             } else if (latestMsg == lastTextMsg) {
                 Log.d("Forward", "STEP_11: 返回原因 - 消息内容未变化")
-                LogWrapper.logAppend("无有效文字消息，返回。")
+                LogWrapper.logAppend("文字消息未更新（与上次相同），返回。")
                 AssistsCore.back()
                 return@next Step.get(StepTag.STEP_2, delay = 1000)
-            } else if (latestMsgIndex < latestImageIndex && latestImageIndex != -1) {
-                Log.d("Forward", "STEP_11: 返回原因 - 文字消息比图片消息旧")
-                LogWrapper.logAppend("无有效文字消息，返回。")
+            } else if (latestMsgIndex < latestRobotImageIndex && latestRobotImageIndex != -1) {
+                Log.d("Forward", "STEP_11: 返回原因 - 线报员文字早于其最新图片（应先处理图片流程）")
+                LogWrapper.logAppend("线报员最新一条为图片，文字为旧消息，返回。")
                 AssistsCore.back()
                 return@next Step.get(StepTag.STEP_2, delay = 1000)
             }
