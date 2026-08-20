@@ -33,9 +33,23 @@ object CallMethod {
     const val getScreenSize = "getScreenSize"
     const val getAppScreenSize = "getAppScreenSize"
     const val takeScreenshot = "takeScreenshot"
+    const val takeScreenshotSave = "takeScreenshotSave"
+    const val takeScreenshotToFile = "takeScreenshotToFile"
     const val setOverlayFlags = "setOverlayFlags"
     const val scanQR = "scanQR"
+    /** @deprecated 请改用 assistsxFloat 的 open（FloatCallMethod.open） */
+    @Deprecated(
+        message = "Use assistsxFloat open (FloatCallMethod.open) instead",
+        replaceWith = ReplaceWith("FloatCallMethod.open", "com.ven.assists.web.floating.FloatCallMethod"),
+    )
     const val loadWebViewOverlay = "loadWebViewOverlay"
+
+    /** @deprecated 请改用 assistsxFloat 的 close（FloatCallMethod.close） */
+    @Deprecated(
+        message = "Use assistsxFloat close (FloatCallMethod.close) instead",
+        replaceWith = ReplaceWith("FloatCallMethod.close", "com.ven.assists.web.floating.FloatCallMethod"),
+    )
+    const val closeOverlay = "closeOverlay"
 
 
     //手势方法
@@ -49,5 +63,34 @@ object CallMethod {
     const val getMacAddress = "getMacAddress"
     const val getAndroidID = "getAndroidID"
     const val getUniqueDeviceId = "getUniqueDeviceId"
+
+    const val setAccessibilityEventFilters = "setAccessibilityEventFilters"
+
+    const val addAccessibilityEventFilter = "addAccessibilityEventFilter"
+
+    const val httpRequest = "httpRequest"
+    const val getDeviceInfo = "getDeviceInfo"
+    const val getNetworkType = "getNetworkType"
+    const val isAppInstalled = "isAppInstalled"
+
+    const val getClipboardLatestText = "getClipboardLatestText"
+    const val getClipboardText = "getClipboardText"
+
+    const val openUrlInBrowser = "openUrlInBrowser"
+    const val keepScreenOn = "keepScreenOn"
+    const val clearKeepScreenOn = "clearKeepScreenOn"
+    const val download = "download"
+    const val audioPlayFromFile = "audioPlayFromFile"
+    const val audioStop = "audioStop"
+    const val audioPlayRingtone = "audioPlayRingtone"
+    const val audioStopRingtone = "audioStopRingtone"
+    const val recognizeTextInScreenshot = "recognizeTextInScreenshot"
+    
+    // 通讯录相关方法
+    const val addContact = "addContact"
+    const val getAllContacts = "getAllContacts"
+
+    // 节点树相关方法
+    const val saveRootNodeTreeJson = "saveRootNodeTreeJson"
 
 }

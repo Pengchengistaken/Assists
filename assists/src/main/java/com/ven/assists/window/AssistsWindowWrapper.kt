@@ -1,7 +1,6 @@
 package com.ven.assists.window
 
 import android.annotation.SuppressLint
-import android.util.Log
 import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
@@ -9,10 +8,12 @@ import android.view.ViewTreeObserver.OnGlobalLayoutListener
 import android.view.WindowManager
 import androidx.core.view.isInvisible
 import androidx.core.view.isVisible
-import com.blankj.utilcode.util.BarUtils
+import android.os.SystemClock
 import com.blankj.utilcode.util.ScreenUtils
+import com.ven.assists.base.R
 import com.ven.assists.base.databinding.AssistsWindowLayoutWrapperBinding
 import com.ven.assists.utils.CoroutineWrapper
+import com.ven.assists.window.AssistsWindowManager.overlayToast
 
 /**
  * 浮窗包装类
@@ -34,11 +35,32 @@ class AssistsWindowWrapper(
     /** 当前布局宽度 */
     private var layoutWidth: Int = 0
 
-    /** 触摸事件按下时的原始X坐标 */
+    /** 触摸事件按下时的屏幕原始X坐标 */
     private var eventDownRawX = 0
 
-    /** 触摸事件按下时的原始Y坐标 */
+    /** 触摸事件按下时的屏幕原始Y坐标 */
     private var eventDownRawY = 0
+
+    /** 触摸按下时窗口的X坐标，用于按增量更新避免跳变 */
+    private var downWindowX = 0
+
+    /** 触摸按下时窗口的Y坐标，用于按增量更新避免跳变 */
+    private var downWindowY = 0
+
+    /** 还原时使用的窗口 X 坐标 */
+    private var restoreX = 0
+
+    /** 还原时使用的窗口 Y 坐标 */
+    private var restoreY = 0
+
+    /** 还原时使用的窗口宽度 */
+    private var restoreWidth = 0
+
+    /** 还原时使用的窗口高度 */
+    private var restoreHeight = 0
+
+    /** 上次提示窗口大小达到限制的时间戳（uptimeMillis） */
+    private var lastSizeLimitToastUptimeMs = 0L
 
     /** 最小高度限制，-1表示无限制 */
     var minHeight = -1
@@ -64,8 +86,14 @@ class AssistsWindowWrapper(
     /** Y轴偏移量 */
     var initialYOffset = 0
 
-    /** 是否初始居中显示 */
+    /** 是否初始居中显示（同时左右+上下居中，等价于两者都为 true） */
     var initialCenter = false
+
+    /** 是否初始左右（水平）居中；为 true 时忽略 initialX */
+    var initialCenterHorizontal = false
+
+    /** 是否初始上下（垂直）居中；为 true 时忽略 initialY */
+    var initialCenterVertical = false
 
     /** 是否显示操作按钮（移动、缩放、关闭） */
     var showOption: Boolean = true
@@ -77,58 +105,126 @@ class AssistsWindowWrapper(
     var wmlp: WindowManager.LayoutParams = wmLayoutParams ?: let { AssistsWindowManager.createLayoutParams() }
 
     /**
+     * 判断窗口宽高是否已撑满屏幕
+     */
+    private fun isWindowFilledScreen(): Boolean {
+        return wmlp.width >= ScreenUtils.getScreenWidth() && wmlp.height >= ScreenUtils.getScreenHeight()
+    }
+
+    /**
+     * 保存当前未撑满时的位置与尺寸，供还原使用
+     */
+    private fun saveRestoreBounds() {
+        if (isWindowFilledScreen()) return
+        restoreX = wmlp.x
+        restoreY = wmlp.y
+        restoreWidth = wmlp.width
+        restoreHeight = wmlp.height
+    }
+
+    /**
+     * 按窗口是否撑满屏幕切换最大化按钮图标
+     */
+    private fun updateMaximizeButton() {
+        val iconRes = if (isWindowFilledScreen()) R.drawable.window_restore else R.drawable.window_max
+        viewBinding.ivMaximize.setImageResource(iconRes)
+    }
+
+    /**
+     * 拖动或缩放后同步还原快照与最大化按钮状态
+     */
+    private fun syncMaximizeStateAfterDrag() {
+        if (!isWindowFilledScreen()) {
+            saveRestoreBounds()
+        }
+        updateMaximizeButton()
+    }
+
+    /**
+     * 窗口大小达到限制时提示，4 秒内最多提示一次
+     */
+    private fun toastSizeLimitIfNeeded() {
+        val now = SystemClock.uptimeMillis()
+        if (now - lastSizeLimitToastUptimeMs < SIZE_LIMIT_TOAST_INTERVAL_MS) return
+        lastSizeLimitToastUptimeMs = now
+        "窗口大小已达到限制".overlayToast()
+    }
+
+    /**
      * 缩放触摸事件监听器
-     * 处理浮窗的缩放操作
+     * 处理浮窗的缩放操作：以按下时窗口尺寸与位置为基准，按手指位移增量更新，避免跳变
      */
     private val onTouchScaleListener = object : View.OnTouchListener {
         override fun onTouch(v: View?, event: MotionEvent): Boolean {
-            if (event.action == MotionEvent.ACTION_DOWN) {
-                layoutHeight = viewBinding.root.measuredHeight
-                layoutWidth = viewBinding.root.measuredWidth
-                eventDownRawX = event.rawX.toInt()
-                eventDownRawY = event.rawY.toInt()
-                return true
-            }
-            if (event.action == MotionEvent.ACTION_MOVE) {
-                val width = layoutWidth + (eventDownRawX - event.rawX.toInt())
-                if (width > 0) {
-                    if ((minWidth == -1 || width >= minWidth) && (maxWidth == -1 || width <= maxWidth)) {
-                        wmlp.width = width
-                        wmlp.x = event.rawX.toInt()
-                    }
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    layoutHeight = viewBinding.root.measuredHeight
+                    layoutWidth = viewBinding.root.measuredWidth
+                    eventDownRawX = event.rawX.toInt()
+                    eventDownRawY = event.rawY.toInt()
+                    downWindowX = wmlp.x
+                    downWindowY = wmlp.y
+                    return true
                 }
 
-                val height = layoutHeight - (eventDownRawY - event.rawY.toInt())
-
-                if (height > 0) {
-                    if ((minHeight == -1 || height >= minHeight) && (maxHeight == -1 || height <= maxHeight)) {
-                        wmlp.height = height
+                MotionEvent.ACTION_MOVE -> {
+                    val dx = event.rawX.toInt() - eventDownRawX
+                    val dy = event.rawY.toInt() - eventDownRawY
+                    // 左下角缩放：向左拖增大宽度并左移，向下拖增大高度
+                    val width = layoutWidth - dx
+                    if (width > 0) {
+                        val withinWidthLimit =
+                            (minWidth == -1 || width >= minWidth) && (maxWidth == -1 || width <= maxWidth)
+                        if (withinWidthLimit) {
+                            wmlp.width = width
+                            wmlp.x = downWindowX + dx
+                        } else {
+                            toastSizeLimitIfNeeded()
+                        }
                     }
-                }
-                CoroutineWrapper.launch { AssistsWindowManager.updateViewLayout(viewBinding.root, wmlp) }
-                return true
-            }
 
+                    val height = layoutHeight + dy
+                    if (height > 0) {
+                        val withinHeightLimit =
+                            (minHeight == -1 || height >= minHeight) && (maxHeight == -1 || height <= maxHeight)
+                        if (withinHeightLimit) {
+                            wmlp.height = height
+                        } else {
+                            toastSizeLimitIfNeeded()
+                        }
+                    }
+                    syncMaximizeStateAfterDrag()
+                    CoroutineWrapper.launch { AssistsWindowManager.updateViewLayout(viewBinding.root, wmlp) }
+                    return true
+                }
+            }
             return false
         }
     }
 
     /**
      * 移动触摸事件监听器
-     * 处理浮窗的拖动移动操作
+     * 处理浮窗的拖动移动：以按下时窗口位置为基准，按手指位移增量更新，避免跳变
      */
     private val onTouchMoveListener = object : View.OnTouchListener {
         override fun onTouch(v: View?, event: MotionEvent): Boolean {
-            if (event.action == MotionEvent.ACTION_DOWN) {
-                return true
-            }
-            if (event.action == MotionEvent.ACTION_MOVE) {
-                wmlp.x = event.rawX.toInt()
-                wmlp.y = event.rawY.toInt() - BarUtils.getStatusBarHeight()
-                CoroutineWrapper.launch { AssistsWindowManager.updateViewLayout(viewBinding.root, wmlp) }
-                return true
-            }
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    eventDownRawX = event.rawX.toInt()
+                    eventDownRawY = event.rawY.toInt()
+                    downWindowX = wmlp.x
+                    downWindowY = wmlp.y
+                    return true
+                }
 
+                MotionEvent.ACTION_MOVE -> {
+                    wmlp.x = downWindowX + (event.rawX.toInt() - eventDownRawX)
+                    wmlp.y = downWindowY + (event.rawY.toInt() - eventDownRawY)
+                    syncMaximizeStateAfterDrag()
+                    CoroutineWrapper.launch { AssistsWindowManager.updateViewLayout(viewBinding.root, wmlp) }
+                    return true
+                }
+            }
             return false
         }
     }
@@ -145,17 +241,23 @@ class AssistsWindowWrapper(
                 override fun onGlobalLayout() {
                     if (root.measuredWidth > 0) {
                         root.isInvisible = false
-                        if (initialCenter) {
-                            val measuredWidth = root.measuredWidth
-                            val measuredHeight = root.measuredHeight
-                            val initialX = ScreenUtils.getScreenWidth() / 2 - measuredWidth / 2
-                            val initialY = ScreenUtils.getScreenHeight() / 2 - measuredHeight / 2
-                            wmlp.x = initialX
-                            wmlp.y = initialY
+                        val measuredWidth = root.measuredWidth
+                        val measuredHeight = root.measuredHeight
+                        // initialCenter 为 true 时同时左右+上下居中；也可单独配置水平/垂直居中
+                        val centerH = initialCenter || initialCenterHorizontal
+                        val centerV = initialCenter || initialCenterVertical
+                        wmlp.x = if (centerH) {
+                            ScreenUtils.getScreenWidth() / 2 - measuredWidth / 2
                         } else {
-                            wmlp.x = initialX
-                            wmlp.y = initialY
+                            initialX
                         }
+                        wmlp.y = if (centerV) {
+                            ScreenUtils.getScreenHeight() / 2 - measuredHeight / 2
+                        } else {
+                            initialY
+                        }
+                        saveRestoreBounds()
+                        updateMaximizeButton()
                         CoroutineWrapper.launch { AssistsWindowManager.updateViewLayout(root, wmlp) }
                         root.viewTreeObserver.removeOnGlobalLayoutListener(this)
                     }
@@ -175,10 +277,26 @@ class AssistsWindowWrapper(
             // 添加内容视图
             flContainer.addView(view)
             ivMaximize.setOnClickListener {
-                wmlp.x = 0
-                wmlp.y = 0
-                wmlp.width = ScreenUtils.getScreenWidth()
-                wmlp.height = ScreenUtils.getScreenHeight()
+                if (isWindowFilledScreen()) {
+                    // 无有效快照时（如初始即为全屏），还原为居中半屏
+                    if (restoreWidth <= 0 || restoreHeight <= 0) {
+                        restoreWidth = ScreenUtils.getScreenWidth() / 2
+                        restoreHeight = ScreenUtils.getScreenHeight() / 2
+                        restoreX = ScreenUtils.getScreenWidth() / 4
+                        restoreY = ScreenUtils.getScreenHeight() / 4
+                    }
+                    wmlp.x = restoreX
+                    wmlp.y = restoreY
+                    wmlp.width = restoreWidth
+                    wmlp.height = restoreHeight
+                } else {
+                    saveRestoreBounds()
+                    wmlp.x = 0
+                    wmlp.y = 0
+                    wmlp.width = ScreenUtils.getScreenWidth()
+                    wmlp.height = ScreenUtils.getScreenHeight()
+                }
+                updateMaximizeButton()
                 CoroutineWrapper.launch { AssistsWindowManager.updateViewLayout(root, wmlp) }
             }
             ivMinimize.setOnClickListener {
@@ -218,5 +336,10 @@ class AssistsWindowWrapper(
      */
     fun getView(): View {
         return viewBinding.root
+    }
+
+    companion object {
+        /** 窗口大小达到限制提示的最小间隔 */
+        private const val SIZE_LIMIT_TOAST_INTERVAL_MS = 4000L
     }
 }

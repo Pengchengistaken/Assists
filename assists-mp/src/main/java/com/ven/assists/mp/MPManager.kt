@@ -150,7 +150,7 @@ object MPManager {
                 intent.getParcelableExtra<Intent>(REQUEST_DATA)
             }
             val mediaProjection = mediaProjectionManager.getMediaProjection(requestCode, requestData!!)
-            mediaProjection.registerCallback(object : MediaProjection.Callback() {
+            mediaProjection?.registerCallback(object : MediaProjection.Callback() {
                 override fun onStop() {
                     mediaProjectionCallback?.onStop()
                 }
@@ -165,7 +165,7 @@ object MPManager {
                     mediaProjectionCallback?.onCapturedContentVisibilityChanged(isVisible)
                 }
             }, Handler(Looper.getMainLooper()))
-            mediaProjection.createVirtualDisplay(
+            mediaProjection?.createVirtualDisplay(
                 "assists_mp",
                 screenWidth,
                 screenHeight,
@@ -196,15 +196,15 @@ object MPManager {
      */
     suspend fun request(autoAllow: Boolean = true, timeOut: Long = 5000): Boolean {
         var projectionManager: MediaProjectionManager? = null
-        AssistsService.instance?.let {
+        AssistsService.getOrNull()?.let {
             projectionManager = it.getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
         } ?: let {
             projectionManager = ActivityUtils.getTopActivity()?.getSystemService(MEDIA_PROJECTION_SERVICE)?.let {
                 it as MediaProjectionManager
             }
         }
-        projectionManager ?: return false
-        val intent = projectionManager!!.createScreenCaptureIntent()
+        val pm = projectionManager ?: return false
+        val intent = pm.createScreenCaptureIntent()
         requestLaunchers[ActivityUtils.getTopActivity()]?.launch(intent)
         completableDeferredEnable = CompletableDeferred()
         if (autoAllow) {
@@ -246,14 +246,14 @@ object MPManager {
      */
     fun takeScreenshot2Bitmap(): Bitmap? {
         imageReader?.let {
-            val image: Image = it.acquireLatestImage()
+            val image: Image? = it.acquireLatestImage()
             try {
-                val bitmap = imageToBitmap(image)
+                val bitmap = image?.let { i -> imageToBitmap(i) }
                 return bitmap
             } catch (e: Throwable) {
                 return null
             } finally {
-                image.close()
+                image?.close()
             }
         } ?: let { throw RuntimeException("Please request permission for screen recording first") }
     }

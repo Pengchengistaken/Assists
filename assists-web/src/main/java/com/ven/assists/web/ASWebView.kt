@@ -13,15 +13,33 @@ import com.blankj.utilcode.util.GsonUtils
 import com.blankj.utilcode.util.LogUtils
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
+import com.google.gson.reflect.TypeToken
 import com.ven.assists.AssistsCore
 import com.ven.assists.service.AssistsService
 import com.ven.assists.service.AssistsServiceListener
 import com.ven.assists.utils.CoroutineWrapper
 import com.ven.assists.utils.runMain
+import com.ven.assists.web.barutils.BarUtilsJavascriptInterface
+import com.ven.assists.web.db.DbJavascriptInterface
+import com.ven.assists.web.filesystem.PathJavascriptInterface
+import com.ven.assists.web.filesystem.fileio.FileIOJavascriptInterface
+import com.ven.assists.web.filesystem.fileutils.FileUtilsJavascriptInterface
+import com.ven.assists.web.gallery.GalleryJavascriptInterface
+import com.ven.assists.web.network.HttpJavascriptInterface
+import com.ven.assists.web.ime.ImeJavascriptInterface
+import com.ven.assists.web.imageutils.ImageUtilsJavascriptInterface
+import com.ven.assists.web.mlkit.MlkitJavascriptInterface
+import com.ven.assists.web.floating.FloatJsInterface
+import com.ven.assists.log.AssistsLog
+import com.ven.assists.log.AssistsLogPaths
+import com.ven.assists.log.AssistsLogTarget
+import com.ven.assists.web.log.AssistsLogJavascriptInterface
+import com.ven.assists.web.screenshot.ScreenshotJavascriptInterface
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.collect
 import java.nio.charset.StandardCharsets
 
 @SuppressLint("SetJavaScriptEnabled")
@@ -31,45 +49,168 @@ open class ASWebView @JvmOverloads constructor(
     defStyleAttr: Int = 0
 ) : WebView(context, attrs, defStyleAttr) {
 
+    companion object {
+        val globalJavascriptCallIntercepts = arrayListOf<(json: String) -> CallInterceptResult>()
+
+        /** 全局 assistsxDb 调用拦截链（宿主注册，无需子类 ASWebView） */
+        val globalDbCallIntercepts = arrayListOf<(json: String) -> CallInterceptResult>()
+
+        /** 全局 assistsxLog 调用拦截链（宿主注册，无需子类 ASWebView） */
+        val globalLogCallIntercepts = arrayListOf<(json: String) -> CallInterceptResult>()
+
+        /** 全局 assistsxMmkv 调用拦截链（宿主注册，无需子类 ASWebView） */
+        val globalMmkvCallIntercepts = arrayListOf<(json: String) -> CallInterceptResult>()
+
+        /** 全局 loadUrl 改写（如相对路径补全）；null 时不改写 */
+        @JvmStatic
+        var globalUrlTransform: ((String) -> String)? = null
+
+        /** 每个 ASWebView 实例创建后的可选配置钩子 */
+        @JvmStatic
+        var bridgeConfigurator: ((ASWebView) -> Unit)? = null
+
+        private const val STREAM_LOG_LATEST_LINE = "latestLine"
+        private const val STREAM_LOG_ENTIRE = "entireLogText"
+    }
+
     private val coroutineScope = CoroutineScope(Dispatchers.Main)
 
+    /** 与 [notifyOnAssistsLogUpdate] 配套，detach 时取消，避免向已销毁 WebView 推送 */
+    private val assistsLogEventSupervisor = SupervisorJob()
+    private val assistsLogEventScope = CoroutineScope(Dispatchers.Main + assistsLogEventSupervisor)
+
     var onReceivedTitle: ((title: String) -> Unit)? = null
-    val javascriptInterface = ASJavascriptInterface(webView = this)
-    val javascriptInterfaceAsync = ASJavascriptInterfaceAsync(webView = this)
 
     var callIntercept: ((json: String) -> CallInterceptResult)? = null
-        set(value) {
-            field = value
-            javascriptInterface.callIntercept = value
+
+    val eventFilters = arrayListOf<AccessibilityEventFilter>()
+
+    val javascriptCallIntercept: (json: String) -> CallInterceptResult = intercept@{ json: String ->
+        var requestJson = json
+
+        globalJavascriptCallIntercepts.forEach {
+            val interceptResult = it.invoke(json)
+            if (interceptResult.intercept) {
+                return@intercept interceptResult
+            } else {
+                requestJson = interceptResult.result
+            }
         }
+
+        callIntercept?.invoke(requestJson)?.let {
+            if (it.intercept) {
+                return@intercept it
+            } else {
+                requestJson = it.result
+            }
+        }
+
+        val request = GsonUtils.fromJson<CallRequest<JsonObject>>(requestJson, object : TypeToken<CallRequest<JsonObject>>() {}.type)
+        var callInterceptResult = CallInterceptResult(false, requestJson)
+        when (request.method) {
+            CallMethod.setAccessibilityEventFilters -> {
+
+                request.arguments?.get("value")?.asJsonArray?.let {
+
+                    GsonUtils.fromJson<List<AccessibilityEventFilter>>(
+                        GsonUtils.toJson(it),
+                        GsonUtils.getListType(AccessibilityEventFilter::class.java)
+                    ).apply {
+                        eventFilters.clear()
+                        eventFilters.addAll(this)
+                    }
+
+                }
+                var result = GsonUtils.toJson(CallResponse<Boolean>(code = 0, data = true))
+
+                callInterceptResult = CallInterceptResult(true, result)
+            }
+
+            CallMethod.addAccessibilityEventFilter -> {
+                request.arguments?.get("value")?.asJsonObject?.let {
+                    GsonUtils.fromJson(
+                        GsonUtils.toJson(it),
+                        AccessibilityEventFilter::class.java
+                    ).apply {
+                        eventFilters.add(this)
+                    }
+                }
+                var result = GsonUtils.toJson(CallResponse<Boolean>(code = 0, data = true))
+
+                callInterceptResult = CallInterceptResult(true, result)
+            }
+        }
+
+
+        callInterceptResult
+    }
+    val javascriptInterface = ASJavascriptInterface(webView = this).apply {
+        callIntercept = javascriptCallIntercept
+    }
+    val javascriptInterfaceAsync = ASJavascriptInterfaceAsync(webView = this).apply {
+        callIntercept = javascriptCallIntercept
+    }
+    val barUtilsJavascriptInterface = BarUtilsJavascriptInterface(webView = this)
+    val pathJavascriptInterface = PathJavascriptInterface(webView = this)
+    val fileIOJavascriptInterface = FileIOJavascriptInterface(webView = this)
+    val fileUtilsJavascriptInterface = FileUtilsJavascriptInterface(webView = this)
+    val httpJavascriptInterface = HttpJavascriptInterface(webView = this)
+    val imeJavascriptInterface = ImeJavascriptInterface(webView = this)
+    val imageUtilsJavascriptInterface = ImageUtilsJavascriptInterface(webView = this)
+    val mlkitJavascriptInterface = MlkitJavascriptInterface(webView = this)
+    val galleryJavascriptInterface = GalleryJavascriptInterface(webView = this)
+    val floatJsInterface = FloatJsInterface(webView = this).apply {
+        this.callIntercept = javascriptCallIntercept
+    }
+    val assistsLogJavascriptInterface = AssistsLogJavascriptInterface(webView = this)
+    val screenshotJavascriptInterface = ScreenshotJavascriptInterface(webView = this)
+    val dbJavascriptInterface = DbJavascriptInterface(webView = this)
+    val mmkvJavascriptInterface = com.ven.assists.web.mmkv.MmkvJavascriptInterface(webView = this)
 
     val assistsServiceListener = object : AssistsServiceListener {
         override fun onAccessibilityEvent(event: AccessibilityEvent) {
-            coroutineScope.launch(Dispatchers.IO) {
-                runCatching {
-                    val node = event.source?.toNode()
-                    val jsonObject = JsonObject().apply {
-                        addProperty("packageName", event.packageName?.toString() ?: "")
-                        addProperty("className", event.className?.toString() ?: "")
-                        addProperty("eventType", event.eventType)
-                        addProperty("action", event.action)
-                        add("texts", JsonArray().apply {
-                            event.text.forEach { text -> this.add(text.toString()) }
-                        })
-                        node?.let {
-                            val element = GsonUtils.getGson().toJsonTree(node)
-                            add("node", element.asJsonObject)
-                        }
+            if (eventFilters.isEmpty()) return
+            eventFilters.find {
+                val eventType = event.eventType
+                val eventTypeValue = it.eventTypes?.contains(eventType)
+                val packageName = event.packageName
+//                Log.d(LogUtils.getConfig().globalTag, "$eventType/$eventTypeValue, $packageName/${it.packageName}")
+                return@find it.packageName == packageName && eventTypeValue == true
+            }?.let {
+                if (it.processInBackground) {
+                    coroutineScope.launch(Dispatchers.IO) {
+                        processEvent(event)?.let { runMain { onAccessibilityEvent(CallResponse(code = 0, data = it)) } }
                     }
+                } else {
+                    processEvent(event)?.let { onAccessibilityEvent(CallResponse(code = 0, data = it)) }
+                }
+            }
+        }
+
+        private fun processEvent(event: AccessibilityEvent): JsonObject? {
+            return runCatching {
+                val node = event.source?.toNode()
+                val jsonObject = JsonObject().apply {
+                    addProperty("packageName", event.packageName?.toString() ?: "")
+                    addProperty("className", event.className?.toString() ?: "")
+                    addProperty("eventType", event.eventType)
+                    addProperty("action", event.action)
+                    add("texts", JsonArray().apply {
+                        event.text.forEach { text -> this.add(text.toString()) }
+                    })
+                    node?.let {
+                        val element = GsonUtils.getGson().toJsonTree(node)
+                        add("node", element.asJsonObject)
+                    }
+                }
 //                    if (LogUtils.getConfig().isLogSwitch) {
 //                        Log.d(LogUtils.getConfig().globalTag, jsonObject.toString())
 //                    }
-                    onAccessibilityEvent(CallResponse(code = 0, data = jsonObject))
-                }.onFailure {
-                    LogUtils.e(it)
-                }
+                jsonObject
+            }.onFailure {
+                LogUtils.e(it)
+            }.getOrNull()
 
-            }
         }
     }
 
@@ -117,18 +258,49 @@ open class ASWebView @JvmOverloads constructor(
         isFocusable = true
         addJavascriptInterface(javascriptInterface, "assistsx")
         addJavascriptInterface(javascriptInterfaceAsync, "assistsxAsync")
+        addJavascriptInterface(barUtilsJavascriptInterface, "assistsxBarUtils")
+        addJavascriptInterface(pathJavascriptInterface, "assistsxPath")
+        addJavascriptInterface(fileIOJavascriptInterface, "assistsxFileIO")
+        addJavascriptInterface(fileUtilsJavascriptInterface, "assistsxFileUtils")
+        addJavascriptInterface(httpJavascriptInterface, "assistsxHttp")
+        addJavascriptInterface(imeJavascriptInterface, "assistsxIme")
+        addJavascriptInterface(imageUtilsJavascriptInterface, "assistsxImageUtils")
+        addJavascriptInterface(mlkitJavascriptInterface, "assistsxMlkit")
+        addJavascriptInterface(galleryJavascriptInterface, "assistsxGallery")
+        addJavascriptInterface(floatJsInterface, "assistsxFloat")
+        addJavascriptInterface(assistsLogJavascriptInterface, "assistsxLog")
+        addJavascriptInterface(screenshotJavascriptInterface, "assistsxScreenshot")
+        addJavascriptInterface(dbJavascriptInterface, "assistsxDb")
+        addJavascriptInterface(mmkvJavascriptInterface, "assistsxMmkv")
         AssistsService.listeners.add(assistsServiceListener)
+
+        // 与 onAccessibilityEvent 相同风格：日志 Flow 每次发射即 evaluateJavascript，页面可选实现 onAssistsLogUpdate(base64)
+        assistsLogEventScope.launch {
+            AssistsLog.latestLine.collect { text ->
+                notifyOnAssistsLogUpdate(STREAM_LOG_LATEST_LINE, text)
+            }
+        }
+        assistsLogEventScope.launch {
+            AssistsLog.entireLogText.collect { text ->
+                notifyOnAssistsLogUpdate(STREAM_LOG_ENTIRE, text)
+            }
+        }
+        bridgeConfigurator?.invoke(this)
     }
 
-    suspend fun <T> onAccessibilityEvent(result: CallResponse<T>) {
+    override fun loadUrl(url: String) {
+        val targetUrl = globalUrlTransform?.invoke(url) ?: url
+        super.loadUrl(targetUrl)
+    }
+
+    fun <T> onAccessibilityEvent(result: CallResponse<T>) {
         runCatching {
             val json = GsonUtils.toJson(result)
 
             val encoded = Base64.encodeToString(json.toByteArray(StandardCharsets.UTF_8), Base64.NO_WRAP)
 
-            runMain {
-                evaluateJavascript(
-                    """
+            evaluateJavascript(
+                """
             try {
                 if (typeof onAccessibilityEvent === 'function') {
                     onAccessibilityEvent("$encoded");
@@ -137,17 +309,48 @@ open class ASWebView @JvmOverloads constructor(
                 console.error('Error calling onAccessibilityEvent:', e);
             }
             """.trimIndent(),
-                    null
-                )
-            }
+                null
+            )
         }.onFailure {
             LogUtils.e("Failed to call onAccessibilityEvent: ${it.message}")
         }
     }
 
+    /**
+     * 将 [AssistsLog] 的 [stream] 与 [text] 以 Base64([CallResponse]) 推给页面全局函数 `onAssistsLogUpdate`（若存在）。
+     * [data] 中含 `stream`：`latestLine` | `entireLogText`，`text`：对应内容。
+     */
+    private fun notifyOnAssistsLogUpdate(stream: String, text: String) {
+        runCatching {
+            val logFilePath = AssistsLogPaths.resolveLogFilePath(AssistsLogTarget.DEFAULT)
+            val data = JsonObject().apply {
+                addProperty("stream", stream)
+                addProperty("text", text)
+                addProperty("logFilePath", logFilePath)
+            }
+            val json = GsonUtils.toJson(CallResponse(code = 0, data = data))
+            val encoded = Base64.encodeToString(json.toByteArray(StandardCharsets.UTF_8), Base64.NO_WRAP)
+            evaluateJavascript(
+                """
+            try {
+                if (typeof onAssistsLogUpdate === 'function') {
+                    onAssistsLogUpdate("$encoded");
+                }
+            } catch (e) {
+                console.error('Error calling onAssistsLogUpdate:', e);
+            }
+                """.trimIndent(),
+                null
+            )
+        }.onFailure {
+            LogUtils.e("Failed to call onAssistsLogUpdate: ${it.message}")
+        }
+    }
 
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
+        assistsLogEventSupervisor.cancel()
+        assistsLogJavascriptInterface.dispose()
         AssistsService.listeners.remove(assistsServiceListener)
     }
 }

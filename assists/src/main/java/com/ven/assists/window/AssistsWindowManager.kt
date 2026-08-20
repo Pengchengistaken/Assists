@@ -21,6 +21,7 @@ import com.ven.assists.utils.CoroutineWrapper
 import com.ven.assists.utils.runIO
 import com.ven.assists.utils.runMain
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import java.util.Collections
@@ -42,6 +43,22 @@ object AssistsWindowManager {
      */
     val viewList = Collections.synchronizedMap(mutableMapOf<String, ViewWrapper>())
 
+    /** 标记 overlayToast 浮窗，使其不参与批量显示/隐藏与堆叠隐藏 */
+    private object OverlayToastViewTag
+
+    private fun View.isOverlayToastWindow(): Boolean = tag === OverlayToastViewTag
+
+    /** 临时隐藏全部浮窗会话中待恢复的窗口 uniqueId；非 null 表示已做过快照且当前处于临时隐藏流程 */
+    private var temporaryHideRestoreIds: MutableSet<String>? = null
+
+    /** 临时隐藏全部浮窗的恢复任务，重复调用会取消上一轮未完成的延迟与恢复 */
+    private var temporaryHideAllJob: Job? = null
+
+    /**
+     * 单次「临时隐藏顶层」会话待恢复的 uniqueId，与 [temporaryHideRestoreIds] 独立。
+     */
+    private var temporaryHideTopRestoreId: String? = null
+
     /**
      * 初始化窗口管理器
      * @param accessibilityService 无障碍服务实例
@@ -57,7 +74,7 @@ object AssistsWindowManager {
      * @return WindowManager实例，如果未初始化则返回null
      */
     fun getWindowManager(): WindowManager? {
-        AssistsService.instance?.getSystemService(Context.WINDOW_SERVICE)?.let { return (it as WindowManager) }
+        AssistsService.getOrNull()?.getSystemService(Context.WINDOW_SERVICE)?.let { return (it as WindowManager) }
         return null
     }
 
@@ -91,7 +108,7 @@ object AssistsWindowManager {
     suspend fun hideAll(isTouchable: Boolean = true, filterViews: List<View> = arrayListOf()) {
         withContext(Dispatchers.Main) {
             viewList.values.forEach {
-                if (filterViews.contains(it.view)) {
+                if (filterViews.contains(it.view) || it.view.isOverlayToastWindow()) {
                     return@forEach
                 }
                 it.view.isInvisible = true
@@ -110,7 +127,7 @@ object AssistsWindowManager {
      */
     suspend fun hideTop(isTouchable: Boolean = true) {
         withContext(Dispatchers.Main) {
-            viewList.values.lastOrNull()?.let {
+            viewList.values.lastOrNull { !it.view.isOverlayToastWindow() }?.let {
                 it.view.isInvisible = true
                 if (isTouchable) {
                     it.touchableByWrapper()
@@ -143,12 +160,61 @@ object AssistsWindowManager {
      */
     suspend fun showTop(isTouchable: Boolean = true) {
         withContext(Dispatchers.Main) {
-            viewList.values.lastOrNull()?.let {
+            viewList.values.lastOrNull { !it.view.isOverlayToastWindow() }?.let {
                 it.view.isVisible = true
                 if (isTouchable) {
                     it.touchableByWrapper()
                 } else {
                     it.nonTouchableByWrapper()
+                }
+            }
+        }
+    }
+
+    /**
+     * 临时隐藏当前所显示的顶层浮窗（非 overlayToast）。
+     * 仅当顶层当前 [View.isVisible] 时记录 [temporaryHideTopRestoreId] 并隐藏。
+     * 若尚未 [restoreTemporarilyHiddenTopWindow] 又再次调用本方法，会先恢复上一轮再重新快照，避免快照丢失。
+     *
+     * @param isTouchable 隐藏后是否可触摸，与 [hideTop] 一致
+     */
+    suspend fun temporarilyHideDisplayedTopWindow(isTouchable: Boolean = true) {
+        withContext(Dispatchers.Main) {
+            if (temporaryHideTopRestoreId != null) {
+                restoreTemporarilyHiddenTopWindow(isTouchable)
+            }
+            val top = viewList.values.lastOrNull { !it.view.isOverlayToastWindow() } ?: return@withContext
+            if (top.view.isVisible) {
+                temporaryHideTopRestoreId = top.uniqueId
+                top.view.isInvisible = true
+                if (isTouchable) {
+                    top.touchableByWrapper()
+                } else {
+                    top.nonTouchableByWrapper()
+                }
+            }
+        }
+    }
+
+    /**
+     * 恢复 [temporarilyHideDisplayedTopWindow] 所隐藏的顶层浮窗；若无待恢复 id 则无操作。
+     *
+     * @param isTouchable 显示后是否可触摸，与 [showTop] 一致
+     */
+    suspend fun restoreTemporarilyHiddenTopWindow(isTouchable: Boolean = true) {
+        withContext(Dispatchers.Main) {
+            val id = temporaryHideTopRestoreId ?: return@withContext
+            temporaryHideTopRestoreId = null
+            viewList[id]?.let { wrapper ->
+                val v = wrapper.view
+                if (v.isOverlayToastWindow()) {
+                    return@let
+                }
+                v.isVisible = true
+                if (isTouchable) {
+                    wrapper.touchableByWrapper()
+                } else {
+                    wrapper.nonTouchableByWrapper()
                 }
             }
         }
@@ -161,6 +227,9 @@ object AssistsWindowManager {
     suspend fun showAll(isTouchable: Boolean = true) {
         withContext(Dispatchers.Main) {
             viewList.values.forEach {
+                if (it.view.isOverlayToastWindow()) {
+                    return@forEach
+                }
                 it.view.isVisible = true
                 if (isTouchable) {
                     it.touchableByWrapper()
@@ -172,14 +241,113 @@ object AssistsWindowManager {
     }
 
     /**
+     * 临时隐藏所有当前可见浮窗并记录 uniqueId；需配对调用 [restoreTemporaryHideMarkedWindows]。
+     * 与 [hideAll] 使用相同的过滤规则（含 overlayToast）。
+     * 若上一轮尚未恢复又再次调用，会先恢复再重新快照，避免快照丢失。
+     *
+     * @param isTouchable 隐藏后是否可触摸，与 [hideAll] 一致
+     * @param filterViews 不参与隐藏的视图列表，与 [hideAll] 一致
+     */
+    suspend fun temporarilyHideAll(
+        isTouchable: Boolean = true,
+        filterViews: List<View> = emptyList(),
+    ) {
+        temporaryHideAllJob?.cancel()
+        temporaryHideAllJob = null
+        withContext(Dispatchers.Main) {
+            if (temporaryHideRestoreIds != null) {
+                restoreTemporaryHideMarkedWindows(isTouchable)
+            }
+            beginTemporaryHideAllSession(isTouchable, filterViews)
+        }
+    }
+
+    /**
+     * 临时隐藏所有浮窗，在 [durationMs] 后仅恢复本次隐藏**前处于可见状态**的窗口。
+     * 隐藏前会对符合条件的可见窗口记录 uniqueId 标记，恢复时只对这些窗口执行显示（不调用 [showAll]）。
+     * 与 [hideAll] 使用相同的过滤规则（含 overlayToast）。
+     * 若在延迟结束前再次调用：若当前仍处于同一次临时隐藏会话，则仅重新计时，不重复快照与隐藏。
+     *
+     * @param durationMs 隐藏持续时长（毫秒），超时后按标记恢复
+     * @param isTouchable 隐藏与恢复时的触摸行为，与 [hideAll] 一致
+     * @param filterViews 不参与隐藏的视图列表，与 [hideAll] 一致
+     */
+    fun temporarilyHideAll(
+        durationMs: Long,
+        isTouchable: Boolean = true,
+        filterViews: List<View> = emptyList(),
+    ) {
+        temporaryHideAllJob?.cancel()
+        temporaryHideAllJob = CoroutineWrapper.launch {
+            withContext(Dispatchers.Main) {
+                if (temporaryHideRestoreIds == null) {
+                    beginTemporaryHideAllSession(isTouchable, filterViews)
+                }
+            }
+            delay(durationMs)
+            restoreTemporaryHideMarkedWindows(isTouchable)
+        }
+    }
+
+    /**
+     * 记录当前可见浮窗并执行 [hideAll]；调用方需保证当前不在临时隐藏会话中。
+     */
+    private suspend fun beginTemporaryHideAllSession(
+        isTouchable: Boolean,
+        filterViews: List<View>,
+    ) {
+        val ids = mutableSetOf<String>()
+        viewList.values.forEach { wrapper ->
+            val v = wrapper.view
+            if (filterViews.contains(v) || v.isOverlayToastWindow()) {
+                return@forEach
+            }
+            if (v.isVisible) {
+                ids.add(wrapper.uniqueId)
+            }
+        }
+        temporaryHideRestoreIds = ids
+        hideAll(isTouchable, filterViews)
+    }
+
+    /**
+     * 按 [temporaryHideRestoreIds] 仅恢复被标记的窗口，并结束本次临时隐藏会话。
+     * 与 [temporarilyHideAll] 配对使用。
+     *
+     * @param isTouchable 显示后是否可触摸，与 [showAll] 一致
+     */
+    suspend fun restoreTemporaryHideMarkedWindows(isTouchable: Boolean = true) {
+        withContext(Dispatchers.Main) {
+            val ids = temporaryHideRestoreIds ?: return@withContext
+            temporaryHideRestoreIds = null
+            ids.forEach { uid ->
+                viewList[uid]?.let { wrapper ->
+                    val v = wrapper.view
+                    if (v.isOverlayToastWindow()) {
+                        return@let
+                    }
+                    v.isVisible = true
+                    if (isTouchable) {
+                        wrapper.touchableByWrapper()
+                    } else {
+                        wrapper.nonTouchableByWrapper()
+                    }
+                }
+            }
+        }
+    }
+
+    /**
      * 添加浮窗包装器
      * @param windowWrapper 浮窗包装器
      * @param isStack 是否堆叠显示，默认为true
      * @param isTouchable 是否可触摸，默认为true
      */
-    fun add(windowWrapper: AssistsWindowWrapper?, isStack: Boolean = true, isTouchable: Boolean = true) {
-        windowWrapper ?: return
-        add(view = windowWrapper.getView(), layoutParams = windowWrapper.wmlp, isStack = isStack, isTouchable = isTouchable)
+    fun add(windowWrapper: AssistsWindowWrapper?, isStack: Boolean = true, isTouchable: Boolean = true, viewTag: Any? = null): ViewWrapper? {
+        windowWrapper ?: return null
+        return add(view = windowWrapper.getView(), layoutParams = windowWrapper.wmlp, isStack = isStack, isTouchable = isTouchable, viewTag = viewTag)?.also {
+            it.assistsWindowWrapper = windowWrapper
+        }
     }
 
     /**
@@ -189,11 +357,26 @@ object AssistsWindowManager {
      * @param isStack 是否堆叠显示，默认为true
      * @param isTouchable 是否可触摸，默认为true
      */
-    fun add(view: View?, layoutParams: WindowManager.LayoutParams = createLayoutParams(), isStack: Boolean = true, isTouchable: Boolean = true) {
-        view ?: return
+    fun add(
+        view: View?,
+        layoutParams: WindowManager.LayoutParams = createLayoutParams(),
+        isStack: Boolean = true,
+        isTouchable: Boolean = true,
+        viewTag: Any? = null
+    ): ViewWrapper? {
+        view ?: return null
         if (!isStack) {
-            viewList.values.lastOrNull()?.let { it.view.isInvisible = true }
+            viewList.values.lastOrNull { !it.view.isOverlayToastWindow() }?.let { it.view.isInvisible = true }
         }
+        view.tag = viewTag
+
+        viewList.values.find {
+            return@find view == it.view
+        }?.let {
+            it.view.isVisible = true
+            return it
+        }
+
         windowManager.addView(view, layoutParams)
         if (isTouchable) {
             layoutParams.touchableByLayoutParams()
@@ -202,6 +385,7 @@ object AssistsWindowManager {
         }
         val wrapper = ViewWrapper(view, layoutParams)
         viewList[wrapper.uniqueId] = wrapper
+        return wrapper
     }
 
     /**
@@ -285,8 +469,8 @@ object AssistsWindowManager {
      * @param view 要添加的视图
      * @param params 布局参数
      */
-    fun push(view: View?, params: WindowManager.LayoutParams = createLayoutParams()) {
-        add(view, params, isStack = false)
+    fun push(view: View?, params: WindowManager.LayoutParams = createLayoutParams()): ViewWrapper? {
+        return add(view, params, isStack = false)
     }
 
     /**
@@ -345,6 +529,25 @@ object AssistsWindowManager {
         }
     }
 
+    fun removeWindow(viewTag: Any?) {
+        try {
+            viewList.values.find {
+                return@find it.view.tag == viewTag
+            }?.let {
+                windowManager.removeView(it.view)
+                viewList.remove(it.uniqueId)
+            }
+
+            if (viewList.size == 1 && viewList.values.first().view == WindowMinimizeManager.viewBinding?.root) {
+                WindowMinimizeManager.hide()
+            }
+
+        } catch (e: Throwable) {
+            LogUtils.e(e)
+        }
+    }
+
+
     fun removeAllWindow() {
         try {
             viewList.forEach {
@@ -365,6 +568,12 @@ object AssistsWindowManager {
         view ?: return false
         return viewList.values.find {
             return@find view == it.view
+        } != null
+    }
+
+    fun contains(viewTag: Any?): Boolean {
+        return viewList.values.find {
+            return@find it.view.tag == viewTag
         } != null
     }
 
@@ -464,7 +673,7 @@ object AssistsWindowManager {
      * @param delay 显示时长，默认2000毫秒
      */
     fun String.overlayToast(delay: Long = 2000) {
-        AssistsService.instance?.let {
+        AssistsService.getOrNull()?.let {
             CoroutineWrapper.launch(isMain = true) {
                 val textView = TextView(it).apply {
                     text = this@overlayToast
@@ -479,9 +688,9 @@ object AssistsWindowManager {
                     showOption = false
                     initialCenter = true
                 }
-                add(assistsWindowWrapper, isTouchable = false)
+                add(assistsWindowWrapper, isTouchable = false, viewTag = OverlayToastViewTag)
                 runIO { delay(delay) }
-                removeView(assistsWindowWrapper.getView())
+                removeWindow(assistsWindowWrapper.getView())
             }
         }
     }
@@ -490,6 +699,13 @@ object AssistsWindowManager {
      * 浮窗视图包装类
      * @param view 浮窗视图
      * @param layoutParams 布局参数
+     * @param uniqueId 唯一标识
+     * @param assistsWindowWrapper 关联的脚手架包装器（通过 [add] 传入 AssistsWindowWrapper 时写入）
      */
-    class ViewWrapper(val view: View, val layoutParams: WindowManager.LayoutParams, val uniqueId: String = UUID.randomUUID().toString())
+    class ViewWrapper(
+        val view: View,
+        val layoutParams: WindowManager.LayoutParams,
+        val uniqueId: String = UUID.randomUUID().toString(),
+        var assistsWindowWrapper: AssistsWindowWrapper? = null,
+    )
 }

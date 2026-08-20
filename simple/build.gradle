@@ -3,7 +3,7 @@ apply plugin: 'kotlin-android'
 apply plugin: 'kotlin-kapt'
 
 android {
-    namespace "com.ven.assists.simple"
+    namespace 'com.ven.assists.simple'
     compileSdk rootProject.ext.compileSdk
     defaultConfig {
         applicationId "com.ven.assists.demo"
@@ -42,7 +42,6 @@ android {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
-    
     kotlinOptions {
         jvmTarget = '17'
         freeCompilerArgs += [
@@ -50,25 +49,26 @@ android {
             "-language-version=1.9"
         ]
     }
-    
     buildFeatures {
         dataBinding true
-    }
-    viewBinding {
-        enabled = true
+        viewBinding true
     }
 }
 
 dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar'])
-    implementation project(':assists')
-    implementation project(':assists-mp')
-    implementation project(':assists-opcv')
-    implementation project(':assists-web')
-//    implementation "com.github.ven-coder.Assists:assists-base:v3.2.16"
-//    implementation "com.github.ven-coder.Assists:assists-opcv:v3.2.16"
-//    implementation "com.github.ven-coder.Assists:assists-mp:v3.2.16"
-//    implementation "com.github.ven-coder.Assists:assists-web:v3.2.16"
+     implementation project(':assists')
+     implementation project(':assists-mp')
+     implementation project(':assists-opcv')
+     implementation project(':assists-web')
+     implementation project(':assists-log')
+     implementation project(':assists-ime')
+//   implementation "io.github.ven-coder:assists-base:${rootProject.ext.mavenVersion}"
+//   implementation "io.github.ven-coder:assists-opcv:${rootProject.ext.mavenVersion}"
+//   implementation "io.github.ven-coder:assists-mp:${rootProject.ext.mavenVersion}"
+//   implementation "io.github.ven-coder:assists-web:${rootProject.ext.mavenVersion}"
+//   implementation "io.github.ven-coder:assists-log:${rootProject.ext.mavenVersion}"
+//   implementation "io.github.ven-coder:assists-ime:${rootProject.ext.mavenVersion}"
     implementation "androidx.room:room-runtime:${rootProject.ext.roomVersion}"
     implementation "androidx.room:room-ktx:${rootProject.ext.roomVersion}"
     implementation "com.github.mrmike:ok2curl:${rootProject.ext.ok2curlVersion}"

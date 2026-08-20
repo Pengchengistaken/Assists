@@ -2,14 +2,19 @@ package com.ven.assists
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.AccessibilityService.TakeScreenshotCallback
+import android.accessibilityservice.AccessibilityServiceInfo
 import android.accessibilityservice.GestureDescription
 import android.app.Application
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Bitmap.CompressFormat
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Rect
 import android.os.Build
@@ -18,12 +23,18 @@ import android.provider.Settings
 import android.text.TextUtils
 import android.util.Log
 import android.view.Display
+import android.view.Gravity
 import android.view.View
 import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityManager
 import android.view.accessibility.AccessibilityNodeInfo
+import android.widget.FrameLayout
+import android.widget.TextView
 import androidx.annotation.RequiresApi
 import androidx.core.os.bundleOf
 import com.blankj.utilcode.util.ActivityUtils
+import com.blankj.utilcode.util.AppUtils
+import com.blankj.utilcode.util.ClipboardUtils
 import com.blankj.utilcode.util.ImageUtils
 import com.blankj.utilcode.util.LogUtils
 import com.blankj.utilcode.util.PathUtils
@@ -31,80 +42,112 @@ import com.blankj.utilcode.util.ScreenUtils
 import com.ven.assists.service.AssistsService
 import com.ven.assists.service.AssistsServiceListener
 import com.ven.assists.utils.CoroutineWrapper
-import com.ven.assists.utils.NodeClassValue
 import com.ven.assists.utils.runMain
 import com.ven.assists.window.AssistsWindowManager
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 import java.util.concurrent.Executors
+import androidx.core.graphics.toColorInt
+import com.blankj.utilcode.util.SizeUtils
+import com.ven.assists.window.AssistsWindowManager.nonTouchableByWrapper
+import androidx.core.graphics.createBitmap
+import com.blankj.utilcode.util.FileUtils
+import com.google.gson.Gson
+import com.google.gson.GsonBuilder
+import com.ven.assists.ui.ClipboardActivity
+import com.ven.assists.utils.AssistsNodeClassNames
+import com.ven.assists.utils.BitmapUtils
+import kotlin.DeprecationLevel
 
 /**
  * 无障碍服务核心类
  * 提供对AccessibilityService的封装和扩展功能
+ *
+ * 节点类型判断：推荐使用 [com.ven.assists.utils.AssistsNodeClassNames] 与 `com.ven.assists.utils` 包下顶层 `isXxx()` 扩展；
+ * 本对象内仍保留与历史版本同名的扩展，已标记为 `@Deprecated`。
  */
 object AssistsCore {
     /** 日志标签 */
     var LOG_TAG = "assists_log"
 
+    /** [init] 传入的 Application，供 [isA11yEnabled] 无参默认 [Context] 使用 */
+    private var initApplication: Application? = null
+
     /** 当前应用在屏幕中的位置信息缓存 */
     private var appRectInScreen: Rect? = null
 
-    /**
-     * 以下是一系列用于快速判断元素类型的扩展函数
-     * 通过比对元素的className来判断元素类型
-     */
+    @Deprecated(
+        message = "请改用 com.ven.assists.utils.isFrameLayout（与 AssistsNodeClassNames 配套）",
+        replaceWith = ReplaceWith("isFrameLayout()", imports = ["com.ven.assists.utils.isFrameLayout"]),
+        level = DeprecationLevel.WARNING,
+    )
+    fun AccessibilityNodeInfo.isFrameLayout(): Boolean = className == AssistsNodeClassNames.FrameLayout
 
-    /** 判断元素是否是FrameLayout */
-    fun AccessibilityNodeInfo.isFrameLayout(): Boolean {
-        return className == NodeClassValue.FrameLayout
-    }
+    @Deprecated(
+        message = "请改用 com.ven.assists.utils.isViewGroup",
+        replaceWith = ReplaceWith("isViewGroup()", imports = ["com.ven.assists.utils.isViewGroup"]),
+        level = DeprecationLevel.WARNING,
+    )
+    fun AccessibilityNodeInfo.isViewGroup(): Boolean = className == AssistsNodeClassNames.ViewGroup
 
-    /** 判断元素是否是ViewGroup */
-    fun AccessibilityNodeInfo.isViewGroup(): Boolean {
-        return className == NodeClassValue.ViewGroup
-    }
+    @Deprecated(
+        message = "请改用 com.ven.assists.utils.isView",
+        replaceWith = ReplaceWith("isView()", imports = ["com.ven.assists.utils.isView"]),
+        level = DeprecationLevel.WARNING,
+    )
+    fun AccessibilityNodeInfo.isView(): Boolean = className == AssistsNodeClassNames.View
 
-    /** 判断元素是否是View */
-    fun AccessibilityNodeInfo.isView(): Boolean {
-        return className == NodeClassValue.View
-    }
+    @Deprecated(
+        message = "请改用 com.ven.assists.utils.isImageView",
+        replaceWith = ReplaceWith("isImageView()", imports = ["com.ven.assists.utils.isImageView"]),
+        level = DeprecationLevel.WARNING,
+    )
+    fun AccessibilityNodeInfo.isImageView(): Boolean = className == AssistsNodeClassNames.ImageView
 
-    /** 判断元素是否是ImageView */
-    fun AccessibilityNodeInfo.isImageView(): Boolean {
-        return className == NodeClassValue.ImageView
-    }
+    @Deprecated(
+        message = "请改用 com.ven.assists.utils.isTextView",
+        replaceWith = ReplaceWith("isTextView()", imports = ["com.ven.assists.utils.isTextView"]),
+        level = DeprecationLevel.WARNING,
+    )
+    fun AccessibilityNodeInfo.isTextView(): Boolean = className == AssistsNodeClassNames.TextView
 
-    /** 判断元素是否是TextView */
-    fun AccessibilityNodeInfo.isTextView(): Boolean {
-        return className == NodeClassValue.TextView
-    }
+    @Deprecated(
+        message = "请改用 com.ven.assists.utils.isLinearLayout",
+        replaceWith = ReplaceWith("isLinearLayout()", imports = ["com.ven.assists.utils.isLinearLayout"]),
+        level = DeprecationLevel.WARNING,
+    )
+    fun AccessibilityNodeInfo.isLinearLayout(): Boolean = className == AssistsNodeClassNames.LinearLayout
 
-    /** 判断元素是否是LinearLayout */
-    fun AccessibilityNodeInfo.isLinearLayout(): Boolean {
-        return className == NodeClassValue.LinearLayout
-    }
+    @Deprecated(
+        message = "请改用 com.ven.assists.utils.isRelativeLayout",
+        replaceWith = ReplaceWith("isRelativeLayout()", imports = ["com.ven.assists.utils.isRelativeLayout"]),
+        level = DeprecationLevel.WARNING,
+    )
+    fun AccessibilityNodeInfo.isRelativeLayout(): Boolean = className == AssistsNodeClassNames.RelativeLayout
 
-    /** 判断元素是否是RelativeLayout */
-    fun AccessibilityNodeInfo.isRelativeLayout(): Boolean {
-        return className == NodeClassValue.RelativeLayout
-    }
+    @Deprecated(
+        message = "请改用 com.ven.assists.utils.isButton",
+        replaceWith = ReplaceWith("isButton()", imports = ["com.ven.assists.utils.isButton"]),
+        level = DeprecationLevel.WARNING,
+    )
+    fun AccessibilityNodeInfo.isButton(): Boolean = className == AssistsNodeClassNames.Button
 
-    /** 判断元素是否是Button */
-    fun AccessibilityNodeInfo.isButton(): Boolean {
-        return className == NodeClassValue.Button
-    }
+    @Deprecated(
+        message = "请改用 com.ven.assists.utils.isImageButton",
+        replaceWith = ReplaceWith("isImageButton()", imports = ["com.ven.assists.utils.isImageButton"]),
+        level = DeprecationLevel.WARNING,
+    )
+    fun AccessibilityNodeInfo.isImageButton(): Boolean = className == AssistsNodeClassNames.ImageButton
 
-    /** 判断元素是否是ImageButton */
-    fun AccessibilityNodeInfo.isImageButton(): Boolean {
-        return className == NodeClassValue.ImageButton
-    }
-
-    /** 判断元素是否是EditText */
-    fun AccessibilityNodeInfo.isEditText(): Boolean {
-        return className == NodeClassValue.EditText
-    }
+    @Deprecated(
+        message = "请改用 com.ven.assists.utils.isEditText",
+        replaceWith = ReplaceWith("isEditText()", imports = ["com.ven.assists.utils.isEditText"]),
+        level = DeprecationLevel.WARNING,
+    )
+    fun AccessibilityNodeInfo.isEditText(): Boolean = className == AssistsNodeClassNames.EditText
 
     /**
      * 获取元素的文本内容
@@ -127,7 +170,48 @@ object AssistsCore {
      * @param application Application实例
      */
     fun init(application: Application) {
+        initApplication = application
         LogUtils.getConfig().globalTag = LOG_TAG
+    }
+
+    private fun requireInitApplicationContext(): Context {
+        return initApplication?.applicationContext
+            ?: throw IllegalStateException("Call AssistsCore.init(application) before using default context in isA11yEnabled().")
+    }
+
+    /**
+     * 节点查找范围：仅活动窗口根，或 [AccessibilityService.getWindows] 下各窗口根（需 manifest 中 flagRetrieveInteractiveWindows）
+     */
+    enum class NodeLookupScope {
+        /** 与 [AccessibilityService.getRootInActiveWindow] 单根一致 */
+        ActiveWindow,
+
+        /** 遍历 [AccessibilityService.getWindows] 中各 [android.view.accessibility.AccessibilityWindowInfo] 的 [android.view.accessibility.AccessibilityWindowInfo.getRoot] */
+        AllWindows,
+    }
+
+    /**
+     * 按范围获取用于节点遍历的根节点列表（统一入口）
+     * @param scope 查找范围，默认 [NodeLookupScope.ActiveWindow]
+     */
+    @JvmOverloads
+    fun getAccessibilityRootNodes(scope: NodeLookupScope = NodeLookupScope.ActiveWindow): List<AccessibilityNodeInfo> {
+        val service = AssistsService.getOrNull() ?: return emptyList()
+        return when (scope) {
+            NodeLookupScope.ActiveWindow -> listOfNotNull(service.rootInActiveWindow)
+            NodeLookupScope.AllWindows -> {
+                val windows = service.windows ?: return emptyList()
+                val roots = arrayListOf<AccessibilityNodeInfo>()
+                for (w in windows) {
+                    try {
+                        w.root?.let { roots.add(it) }
+                    } finally {
+                        w.recycle()
+                    }
+                }
+                roots
+            }
+        }
     }
 
     /**
@@ -144,16 +228,148 @@ object AssistsCore {
      * 检查无障碍服务是否已开启
      * @return true表示服务已开启，false表示服务未开启
      */
+    @Deprecated(
+        message = "依赖 rootInActiveWindow，界面切换或锁屏时易误判；请使用 isA11yEnabled()",
+        replaceWith = ReplaceWith("isA11yEnabled()"),
+    )
     fun isAccessibilityServiceEnabled(): Boolean {
-        return AssistsService.instance != null
+        return runCatching {
+            val roots = getAccessibilityRootNodes(NodeLookupScope.ActiveWindow)
+            LogUtils.d(roots)
+            roots.isNotEmpty()
+        }.onFailure {
+            LogUtils.e(it)
+        }.getOrElse { false }
+    }
+
+    /**
+     * 可靠判断本应用的无障碍服务是否已在系统设置中开启（用户已为该组件打开无障碍）。
+     *
+     * 与 [isAccessibilityServiceEnabled] 不同：后者依赖 [android.view.accessibility.AccessibilityNodeInfo]
+     * 活动窗口根节点，在无焦点窗口、锁屏或界面切换时 [AccessibilityService.getRootInActiveWindow] 常为 null，
+     * 易被误判为未开启。本方法依据无障碍总开关、[Settings.Secure] 已启用组件列表，以及
+     * [AccessibilityManager.getEnabledAccessibilityServiceList] 进行校验，并互为补充以降低 OEM 差异带来的误判。
+     *
+     * 判定方式：在本应用包名下，若任一已启用服务的实现类 [java.lang.Class.isAssignableFrom] 自 [serviceClass]（含子类），
+     * 即视为已开启。故 manifest 中 `android:name` 为 [AssistsService] 的子类时，默认 [serviceClass] 为 [AssistsService] 即可匹配。
+     *
+     * @param context 用于读取系统设置；省略时使用 [init] 传入的 [Application] 的 applicationContext
+     * @param serviceClass 期望的无障碍服务基类；子类实例在系统中启用时同样返回 true
+     */
+    @JvmOverloads
+    fun isA11yEnabled(
+        context: Context = requireInitApplicationContext(),
+        serviceClass: Class<out AccessibilityService> = AssistsService::class.java,
+    ): Boolean {
+        if (!isAccessibilityMasterSwitchOn(context)) return false
+        val pkg = context.packageName
+        val classNames = linkedSetOf<String>()
+        runCatching {
+            val manager = context.getSystemService(Context.ACCESSIBILITY_SERVICE) as AccessibilityManager
+            manager.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK).forEach { info ->
+                val si = info.resolveInfo.serviceInfo
+                if (si.packageName == pkg) classNames.add(si.name)
+            }
+        }.onFailure { LogUtils.e(it) }
+        val enabledSecure = Settings.Secure.getString(
+            context.contentResolver,
+            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
+        ) ?: ""
+        val splitter = TextUtils.SimpleStringSplitter(':')
+        splitter.setString(enabledSecure)
+        for (flat in splitter) {
+            val cn = ComponentName.unflattenFromString(flat) ?: continue
+            if (cn.packageName == pkg) classNames.add(cn.className)
+        }
+        for (name in classNames) {
+            if (isAccessibilityServiceAssignable(name, serviceClass)) return true
+        }
+        return false
+    }
+
+    /** 无障碍功能总开关是否打开 */
+    private fun isAccessibilityMasterSwitchOn(context: Context): Boolean {
+        return runCatching {
+            Settings.Secure.getInt(context.contentResolver, Settings.Secure.ACCESSIBILITY_ENABLED, 0) == 1
+        }.getOrElse {
+            LogUtils.e(it)
+            false
+        }
+    }
+
+    /**
+     * 已启用无障碍实现类是否可赋给 [expectedBase]（用于识别 manifest 中的 [AssistsService] 子类）
+     */
+    private fun isAccessibilityServiceAssignable(
+        implementationClassName: String,
+        expectedBase: Class<out AccessibilityService>,
+    ): Boolean {
+        return runCatching {
+            val impl = Class.forName(implementationClassName)
+            expectedBase.isAssignableFrom(impl)
+        }.getOrElse {
+            LogUtils.e(it)
+            false
+        }
     }
 
     /**
      * 获取当前窗口所属的应用包名
+     * @param scope 查找范围，默认 [NodeLookupScope.ActiveWindow]；[NodeLookupScope.AllWindows] 时优先 [android.view.accessibility.AccessibilityWindowInfo] 的 isFocused 窗口根之 packageName，无则回退为活动根再回退为全窗口根列表中第一个
      * @return 当前窗口的包名，如果获取失败则返回空字符串
      */
-    fun getPackageName(): String {
-        return AssistsService.instance?.rootInActiveWindow?.packageName?.toString() ?: ""
+    @JvmOverloads
+    fun getPackageName(scope: NodeLookupScope = NodeLookupScope.ActiveWindow): String {
+        if (scope == NodeLookupScope.ActiveWindow) {
+            return getAccessibilityRootNodes(NodeLookupScope.ActiveWindow).firstOrNull()?.packageName?.toString() ?: ""
+        }
+        val service = AssistsService.getOrNull() ?: return ""
+        val windows = service.windows
+            ?: return getPackageName(NodeLookupScope.ActiveWindow)
+        for (w in windows) {
+            var pkg: String? = null
+            try {
+                if (w.isFocused) {
+                    pkg = w.root?.packageName?.toString()
+                }
+            } finally {
+                w.recycle()
+            }
+            if (pkg != null) return pkg
+        }
+        val fallbackActive = getPackageName(NodeLookupScope.ActiveWindow)
+        if (fallbackActive.isNotEmpty()) return fallbackActive
+        return getAccessibilityRootNodes(NodeLookupScope.AllWindows).firstOrNull()?.packageName?.toString() ?: ""
+    }
+
+    /**
+     * 屏幕保持常亮
+     */
+    fun keepScreenOn(tip: String = "屏幕保持常亮") {
+        if (AssistsWindowManager.contains("keepScreenOn")) return
+        AssistsService.getOrNull()?.let {
+            AssistsWindowManager.add(FrameLayout(it).apply {
+                setBackgroundColor("#80000000".toColorInt())
+                addView(TextView(it).apply {
+                    text = tip
+                    setTextColor("#80FF0000".toColorInt())
+                    textSize = 20f
+                    layoutParams = FrameLayout.LayoutParams(-2, -2).apply {
+                        gravity = Gravity.CENTER
+                    }
+                })
+                keepScreenOn = true
+            }, viewTag = "keepScreenOn").apply {
+                CoroutineWrapper.launch { this@apply?.nonTouchableByWrapper() }
+            }
+        }
+    }
+
+    /**
+     * 关闭屏幕保持常亮
+     */
+    fun clearKeepScreenOn() {
+        AssistsWindowManager.removeWindow("keepScreenOn")
     }
 
     /**
@@ -162,12 +378,22 @@ object AssistsCore {
      * @param filterText 可选的文本过滤条件
      * @param filterDes 可选的描述文本过滤条件
      * @param filterClass 可选的类名过滤条件
+     * @param scope 根节点来源：活动窗口或全部窗口，默认 [NodeLookupScope.ActiveWindow]
      * @return 符合条件的元素列表
      */
-    fun findById(id: String, filterText: String? = null, filterDes: String? = null, filterClass: String? = null): List<AccessibilityNodeInfo> {
-        var nodes = AssistsService.instance?.rootInActiveWindow?.findById(id) ?: arrayListOf()
-        val filterNodes = filterNodes(nodes, filterText = filterText, filterDes = filterDes, filterClass = filterClass)
-        return filterNodes
+    @JvmOverloads
+    fun findById(
+        id: String,
+        filterText: String? = null,
+        filterDes: String? = null,
+        filterClass: String? = null,
+        scope: NodeLookupScope = NodeLookupScope.ActiveWindow,
+    ): List<AccessibilityNodeInfo> {
+        val nodes = arrayListOf<AccessibilityNodeInfo>()
+        getAccessibilityRootNodes(scope).forEach { root ->
+            nodes.addAll(root.findById(id))
+        }
+        return filterNodes(nodes, filterText = filterText, filterDes = filterDes, filterClass = filterClass)
     }
 
     /**
@@ -195,12 +421,22 @@ object AssistsCore {
      * @param filterViewId 可选的资源id过滤条件
      * @param filterDes 可选的描述文本过滤条件
      * @param filterClass 可选的类名过滤条件
+     * @param scope 根节点来源：活动窗口或全部窗口，默认 [NodeLookupScope.ActiveWindow]
      * @return 符合条件的元素列表
      */
-    fun findByText(text: String, filterViewId: String? = null, filterDes: String? = null, filterClass: String? = null): List<AccessibilityNodeInfo> {
-        val nodes = AssistsService.instance?.rootInActiveWindow?.findByText(text) ?: arrayListOf()
-        val filterNodes = filterNodes(nodes, filterViewId = filterViewId, filterDes = filterDes, filterClass = filterClass)
-        return filterNodes
+    @JvmOverloads
+    fun findByText(
+        text: String,
+        filterViewId: String? = null,
+        filterDes: String? = null,
+        filterClass: String? = null,
+        scope: NodeLookupScope = NodeLookupScope.ActiveWindow,
+    ): List<AccessibilityNodeInfo> {
+        val nodes = arrayListOf<AccessibilityNodeInfo>()
+        getAccessibilityRootNodes(scope).forEach { root ->
+            nodes.addAll(root.findByText(text))
+        }
+        return filterNodes(nodes, filterViewId = filterViewId, filterDes = filterDes, filterClass = filterClass)
     }
 
     /**
@@ -209,17 +445,21 @@ object AssistsCore {
      * @param filterViewId 可选的资源id过滤条件
      * @param filterDes 可选的描述文本过滤条件
      * @param filterClass 可选的类名过滤条件
+     * @param scope 根节点来源：活动窗口或全部窗口，默认 [NodeLookupScope.ActiveWindow]
      * @return 文本完全匹配的元素列表
      */
+    @JvmOverloads
     fun findByTextAllMatch(
         text: String,
         filterViewId: String? = null,
         filterDes: String? = null,
-        filterClass: String? = null
+        filterClass: String? = null,
+        scope: NodeLookupScope = NodeLookupScope.ActiveWindow,
     ): List<AccessibilityNodeInfo> {
-        val nodes = AssistsService.instance?.rootInActiveWindow?.findByText(text) ?: arrayListOf()
-        val filterNodes = filterNodes(nodes, filterViewId = filterViewId, filterDes = filterDes, filterClass = filterClass)
-        return filterNodes
+        // 与 findByText 相同先做系统子串查找与附加条件过滤，再保留 text 或 contentDescription 与目标完全一致的节点
+        return findByText(text, filterViewId, filterDes, filterClass, scope).filter { node ->
+            node.txt() == text || node.des() == text
+        }
     }
 
     /**
@@ -259,28 +499,13 @@ object AssistsCore {
         filterClass: String? = null,
         filterText: String? = null
     ): List<AccessibilityNodeInfo> {
-        val filterNodes = nodes.filter { node ->
-
-            filterViewId?.let {
-                if (it.isEmpty()) return@let
-                return@filter node.viewIdResourceName?.equals(filterViewId) == true
-            }
-            filterText?.let {
-                if (it.isEmpty()) return@let
-                return@filter node.text?.toString()?.equals(filterText) == true
-            }
-            filterDes?.let {
-                if (it.isEmpty()) return@let
-                return@filter node.contentDescription?.toString()?.equals(filterDes) == true
-            }
-            filterClass?.let {
-                if (it.isEmpty()) return@let
-                return@filter node.className?.toString()?.equals(filterClass) == true
-            }
-
-            true
+        // 各条件非空时同时生效（AND），避免原先仅第一个非空条件生效与其它 API 语义冲突
+        return nodes.filter { node ->
+            (filterViewId.isNullOrEmpty() || node.viewIdResourceName == filterViewId) &&
+                (filterText.isNullOrEmpty() || node.text?.toString() == filterText) &&
+                (filterDes.isNullOrEmpty() || node.contentDescription?.toString() == filterDes) &&
+                (filterClass.isNullOrEmpty() || node.className?.toString() == filterClass)
         }
-        return filterNodes
     }
 
     /**
@@ -306,7 +531,6 @@ object AssistsCore {
     fun AccessibilityNodeInfo?.getAllText(): ArrayList<String> {
         if (this == null) return arrayListOf()
         val texts = arrayListOf<String>()
-        texts.filter { false }
         getText()?.let {
             texts.add(it.toString())
         }
@@ -322,50 +546,49 @@ object AssistsCore {
      * @param viewId 可选的资源id过滤条件
      * @param text 可选的文本过滤条件
      * @param des 可选的描述文本过滤条件
+     * @param scope 与 [getAllNodes] 相同，控制全树扫描范围，默认 [NodeLookupScope.ActiveWindow]
      * @return 符合所有条件的元素列表
      */
+    /**
+     * 在候选节点上按 className 与可选 viewId/text/des 链式过滤（与历史 findByTags 行为一致）
+     */
+    private fun refineNodesByTags(
+        candidates: List<AccessibilityNodeInfo>,
+        className: String,
+        viewId: String?,
+        text: String?,
+        des: String?,
+    ): List<AccessibilityNodeInfo> {
+        var nodeList = arrayListOf<AccessibilityNodeInfo>().apply {
+            addAll(candidates.filter { TextUtils.equals(className, it.className) })
+        }
+        if (!viewId.isNullOrEmpty()) {
+            nodeList = arrayListOf<AccessibilityNodeInfo>().apply {
+                addAll(nodeList.filter { it.viewIdResourceName == viewId })
+            }
+        }
+        if (!text.isNullOrEmpty()) {
+            nodeList = arrayListOf<AccessibilityNodeInfo>().apply {
+                addAll(nodeList.filter { it.txt() == text })
+            }
+        }
+        if (!des.isNullOrEmpty()) {
+            nodeList = arrayListOf<AccessibilityNodeInfo>().apply {
+                addAll(nodeList.filter { it.des() == des })
+            }
+        }
+        return nodeList
+    }
+
+    @JvmOverloads
     fun findByTags(
         className: String,
         viewId: String? = null,
         text: String? = null,
-        des: String? = null
+        des: String? = null,
+        scope: NodeLookupScope = NodeLookupScope.ActiveWindow,
     ): List<AccessibilityNodeInfo> {
-        var nodeList = arrayListOf<AccessibilityNodeInfo>()
-        getAllNodes().forEach {
-            if (TextUtils.equals(className, it.className)) {
-                nodeList.add(it)
-            }
-        }
-        nodeList = viewId?.let {
-            if (it.isEmpty()) return@let nodeList
-            return@let arrayListOf<AccessibilityNodeInfo>().apply {
-                addAll(nodeList.filter {
-                    return@filter it.viewIdResourceName == viewId
-                })
-            }
-        } ?: let {
-            return@let nodeList
-        }
-
-        nodeList = text?.let {
-            if (it.isEmpty()) return@let nodeList
-
-            return@let arrayListOf<AccessibilityNodeInfo>().apply {
-                addAll(nodeList.filter {
-                    return@filter it.txt() == text
-                })
-            }
-        } ?: let { return@let nodeList }
-        nodeList = des?.let {
-            if (it.isEmpty()) return@let nodeList
-
-            return@let arrayListOf<AccessibilityNodeInfo>().apply {
-                addAll(nodeList.filter {
-                    return@filter it.des() == des
-                })
-            }
-        } ?: let { return@let nodeList }
-        return nodeList
+        return refineNodesByTags(getAllNodes(scope = scope), className, viewId, text, des)
     }
 
     /**
@@ -382,41 +605,7 @@ object AssistsCore {
         text: String? = null,
         des: String? = null
     ): List<AccessibilityNodeInfo> {
-        var nodeList = arrayListOf<AccessibilityNodeInfo>()
-        getNodes().forEach {
-            if (TextUtils.equals(className, it.className)) {
-                nodeList.add(it)
-            }
-        }
-        nodeList = viewId?.let {
-            if (it.isEmpty()) return@let nodeList
-            return@let arrayListOf<AccessibilityNodeInfo>().apply {
-                addAll(nodeList.filter {
-                    return@filter it.viewIdResourceName == viewId
-                })
-            }
-        } ?: let {
-            return@let nodeList
-        }
-
-        nodeList = text?.let {
-            if (it.isEmpty()) return@let nodeList
-            return@let arrayListOf<AccessibilityNodeInfo>().apply {
-                addAll(nodeList.filter {
-                    return@filter it.txt() == text
-                })
-            }
-        } ?: let { return@let nodeList }
-        nodeList = des?.let {
-            if (it.isEmpty()) return@let nodeList
-            return@let arrayListOf<AccessibilityNodeInfo>().apply {
-                addAll(nodeList.filter {
-                    return@filter it.des() == des
-                })
-            }
-        } ?: let { return@let nodeList }
-
-        return nodeList
+        return refineNodesByTags(getNodes(), className, viewId, text, des)
     }
 
     /**
@@ -451,16 +640,22 @@ object AssistsCore {
      * @param filterDes 可选的描述文本过滤条件
      * @param filterClass 可选的类名过滤条件
      * @param filterText 可选的文本过滤条件
+     * @param scope 根节点来源：活动窗口或全部窗口，默认 [NodeLookupScope.ActiveWindow]；多根时整次收集共享 10000 个节点的全局上限
      * @return 包含所有元素的列表
      */
+    @JvmOverloads
     fun getAllNodes(
         filterViewId: String? = null,
         filterDes: String? = null,
         filterClass: String? = null,
-        filterText: String? = null
+        filterText: String? = null,
+        scope: NodeLookupScope = NodeLookupScope.ActiveWindow,
     ): List<AccessibilityNodeInfo> {
         val nodeList = arrayListOf<AccessibilityNodeInfo>()
-        AssistsService.instance?.rootInActiveWindow?.getNodes(nodeList)
+        getAccessibilityRootNodes(scope).forEach { root ->
+            if (nodeList.size >= 10000) return@forEach
+            root.getNodes(nodeList)
+        }
         val filterNodes = filterNodes(nodeList, filterViewId, filterDes, filterClass, filterText)
         return filterNodes
     }
@@ -518,8 +713,7 @@ object AssistsCore {
     fun AccessibilityNodeInfo.getChildren(): ArrayList<AccessibilityNodeInfo> {
         val nodes = arrayListOf<AccessibilityNodeInfo>()
         for (i in 0 until this.childCount) {
-            val child = getChild(i)
-            nodes.add(child)
+            getChild(i)?.let { nodes.add(it) }
         }
         return nodes
     }
@@ -539,23 +733,30 @@ object AssistsCore {
 
             val gestureResultCallback = object : AccessibilityService.GestureResultCallback() {
                 override fun onCompleted(gestureDescription: GestureDescription?) {
+                    LogUtils.i("[GestureDiag] dispatchGesture onCompleted service=${AssistsService.getOrNull() != null}")
                     CoroutineWrapper.launch { AssistsWindowManager.touchableByAll() }
                     completableDeferred.complete(true)
                 }
 
                 override fun onCancelled(gestureDescription: GestureDescription?) {
+                    LogUtils.w("[GestureDiag] dispatchGesture onCancelled service=${AssistsService.getOrNull() != null}")
                     CoroutineWrapper.launch { AssistsWindowManager.touchableByAll() }
                     completableDeferred.complete(false)
                 }
             }
-            val runResult = AssistsService.instance?.let {
+            val runResult = AssistsService.getOrNull()?.let {
                 AssistsWindowManager.nonTouchableByAll()
                 delay(nonTouchableWindowDelay)
+                LogUtils.i("[GestureDiag] dispatchGesture call")
                 runMain { it.dispatchGesture(gesture, gestureResultCallback, null) }
             } ?: let {
+                LogUtils.e("[GestureDiag] dispatchGesture skipped: AssistsService is null")
                 return false
             }
-            if (!runResult) return false
+            if (!runResult) {
+                LogUtils.w("[GestureDiag] dispatchGesture returned false (not accepted)")
+                return false
+            }
             return@runCatching completableDeferred.await()
         }.getOrDefault(false)
 
@@ -595,29 +796,40 @@ object AssistsCore {
         startTime: Long,
         duration: Long,
     ): Boolean {
+        // 注意：不可改为直接调用 [dispatchGesture]，否则 [nodeGestureClick] 等外层已包一层 nonTouchable/touchable 时，
+        // 手势完成回调会提前 touchableByAll，与外层延迟与恢复顺序冲突。
         return runCatching {
             val builder = GestureDescription.Builder()
             val strokeDescription = GestureDescription.StrokeDescription(path, startTime, duration)
             val gestureDescription = builder.addStroke(strokeDescription).build()
             val deferred = CompletableDeferred<Boolean>()
             val runResult = runMain {
-                return@runMain AssistsService.instance?.dispatchGesture(gestureDescription, object : AccessibilityService.GestureResultCallback() {
+                val svc = AssistsService.getOrNull()
+                LogUtils.i(
+                    "[GestureDiag] gesture(path) dispatch service=${svc != null} " +
+                        "startTime=$startTime duration=$duration",
+                )
+                return@runMain svc?.dispatchGesture(gestureDescription, object : AccessibilityService.GestureResultCallback() {
                     override fun onCompleted(gestureDescription: GestureDescription) {
+                        LogUtils.i("[GestureDiag] gesture(path) onCompleted")
                         deferred.complete(true)
                     }
 
                     override fun onCancelled(gestureDescription: GestureDescription) {
+                        LogUtils.w("[GestureDiag] gesture(path) onCancelled")
                         deferred.complete(false)
                     }
                 }, null) ?: let {
+                    LogUtils.e("[GestureDiag] gesture(path) dispatch skipped: AssistsService is null")
                     return@runMain false
                 }
             }
-            if (!runResult) return false
-            val result = deferred.await()
-            return result
+            if (!runResult) {
+                LogUtils.w("[GestureDiag] gesture(path) dispatch returned false (not accepted)")
+                return false
+            }
+            deferred.await()
         }.getOrDefault(false)
-
     }
 
     /**
@@ -737,19 +949,23 @@ object AssistsCore {
         clickInterval: Long = 25,
     ): Boolean {
         return runCatching {
-            AssistsWindowManager.nonTouchableByAll()
+            runMain { AssistsWindowManager.nonTouchableByAll() }
             delay(switchWindowIntervalDelay)
             val bounds = getBoundsInScreen()
 
             val x = bounds.centerX().toFloat() + offsetX
             val y = bounds.centerY().toFloat() + offsetY
 
-            AssistsCore.gestureClick(x, y, clickDuration)
+            val first = gestureClick(x, y, clickDuration)
+            if (!first) {
+                runMain { AssistsWindowManager.touchableByAll() }
+                return@runCatching false
+            }
             delay(clickInterval)
-            AssistsCore.gestureClick(x, y, clickDuration)
-            AssistsWindowManager.touchableByAll()
-            return@runCatching true
-        }.getOrDefault(true)
+            val second = gestureClick(x, y, clickDuration)
+            runMain { AssistsWindowManager.touchableByAll() }
+            second
+        }.getOrDefault(false)
     }
 
     /**
@@ -797,7 +1013,7 @@ object AssistsCore {
      * @return 返回操作是否成功
      */
     fun back(): Boolean {
-        return AssistsService.instance?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK) ?: false
+        return AssistsService.getOrNull()?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK) ?: false
     }
 
     /**
@@ -805,7 +1021,7 @@ object AssistsCore {
      * @return 返回主屏幕操作是否成功
      */
     fun home(): Boolean {
-        return AssistsService.instance?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME) ?: false
+        return AssistsService.getOrNull()?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME) ?: false
     }
 
     /**
@@ -813,7 +1029,7 @@ object AssistsCore {
      * @return 打开通知栏操作是否成功
      */
     fun notifications(): Boolean {
-        return AssistsService.instance?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_NOTIFICATIONS) ?: false
+        return AssistsService.getOrNull()?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_NOTIFICATIONS) ?: false
     }
 
     /**
@@ -821,7 +1037,7 @@ object AssistsCore {
      * @return 显示最近任务操作是否成功
      */
     fun recentApps(): Boolean {
-        return AssistsService.instance?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_RECENTS) ?: false
+        return AssistsService.getOrNull()?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_RECENTS) ?: false
     }
 
     /**
@@ -831,7 +1047,7 @@ object AssistsCore {
      */
     fun AccessibilityNodeInfo.paste(text: String?): Boolean {
         performAction(AccessibilityNodeInfo.ACTION_FOCUS)
-        AssistsService.instance?.let {
+        AssistsService.getOrNull()?.let {
             val clipboard = it.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
             val clip = ClipData.newPlainText("label", text)
             clipboard.setPrimaryClip(clip)
@@ -840,7 +1056,7 @@ object AssistsCore {
         return false
     }
 
-    fun AccessibilityNodeInfo.focus(): Boolean{
+    fun AccessibilityNodeInfo.focus(): Boolean {
         return performAction(AccessibilityNodeInfo.ACTION_FOCUS)
     }
 
@@ -910,7 +1126,7 @@ object AssistsCore {
             delay(timeoutMillis)
             completableDeferred.complete(false)
         }
-        AssistsService.instance?.let {
+        AssistsService.getOrNull()?.let {
             val clipboard = it.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
             val clip = ClipData.newPlainText("label", text)
             clipboard.setPrimaryClip(clip)
@@ -985,7 +1201,7 @@ object AssistsCore {
      * @return 应用窗口的位置信息，如果未找到则返回null
      */
     fun getAppBoundsInScreen(): Rect? {
-        return AssistsService.instance?.let {
+        return AssistsService.getOrNull()?.let {
             return@let findById("android:id/content").firstOrNull()?.getBoundsInScreen()
         }
     }
@@ -1039,15 +1255,28 @@ object AssistsCore {
     /**
      * 通过Intent启动应用
      * @param intent 要启动的应用Intent
-     * @return 启动操作是否成功
+     * @return 目标应用是否进入前台
      */
     suspend fun launchApp(intent: Intent): Boolean {
+        val targetPackage = intent.getPackage()?.takeIf { it.isNotEmpty() }
+            ?: intent.component?.packageName
+            ?: ""
+        val startSucceeded = runCatching {
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            AssistsService.getOrNull()?.startActivity(intent) != null
+        }.getOrDefault(false)
+
+        if (startSucceeded) {
+            return waitForForeground(targetPackage)
+        }
+
+        // 部分机型/后台限制下直接启动失败，回退为透明 View + 屏幕中心手势点击触发
         val completableDeferred = CompletableDeferred<Boolean>()
-        val view = View(AssistsService.instance).apply {
+        val view = View(AssistsService.getOrNull()).apply {
             setOnClickListener {
                 runCatching {
                     intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    AssistsService.instance?.startActivity(intent)
+                    AssistsService.getOrNull()?.startActivity(intent)
                     completableDeferred.complete(true)
                 }.onFailure {
                     completableDeferred.complete(false)
@@ -1057,29 +1286,41 @@ object AssistsCore {
         runMain { AssistsWindowManager.add(view) }
         CoroutineWrapper.launch {
             delay(250)
-            val clickResult = gestureClick(ScreenUtils.getScreenWidth() / 2.toFloat(), ScreenUtils.getScreenHeight() / 2.toFloat())
-            if (!clickResult) {
-                completableDeferred.complete(false)
-            }
+            gestureClick(ScreenUtils.getScreenWidth() / 2.toFloat(), ScreenUtils.getScreenHeight() / 2.toFloat())
             delay(250)
             runMain { AssistsWindowManager.removeView(view) }
         }
-        return completableDeferred.await()
+        // 手势成功与否不决定返回值，以目标是否进入前台为准
+        completableDeferred.await()
+        return waitForForeground(targetPackage)
     }
 
     /**
      * 通过包名启动应用
      * @param packageName 要启动的应用包名
-     * @return 启动操作是否成功
+     * @return 目标应用是否进入前台
      */
     suspend fun launchApp(packageName: String): Boolean {
+        val service = AssistsService.getOrNull() ?: return false
+        val intent = service.packageManager.getLaunchIntentForPackage(packageName) ?: return false
+        val startSucceeded = runCatching {
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            service.startActivity(intent)
+            true
+        }.getOrDefault(false)
+
+        if (startSucceeded) {
+            return waitForForeground(packageName)
+        }
+
+        // 部分机型/后台限制下直接启动失败，回退为透明 View + 屏幕中心手势点击触发
         val completableDeferred = CompletableDeferred<Boolean>()
-        val view = View(AssistsService.instance).apply {
+        val view = View(service).apply {
             setOnClickListener {
                 runCatching {
-                    val intent = AssistsService.instance?.packageManager?.getLaunchIntentForPackage(packageName)
-                    intent?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    AssistsService.instance?.startActivity(intent)
+                    val fallbackIntent = service.packageManager.getLaunchIntentForPackage(packageName)
+                    fallbackIntent?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    service.startActivity(fallbackIntent)
                     completableDeferred.complete(true)
                 }.onFailure {
                     completableDeferred.complete(false)
@@ -1089,14 +1330,36 @@ object AssistsCore {
         runMain { AssistsWindowManager.add(view) }
         CoroutineWrapper.launch {
             delay(250)
-            val clickResult = gestureClick(ScreenUtils.getScreenWidth() / 2.toFloat(), ScreenUtils.getScreenHeight() / 2.toFloat())
-            if (!clickResult) {
-                completableDeferred.complete(false)
-            }
+            gestureClick(ScreenUtils.getScreenWidth() / 2.toFloat(), ScreenUtils.getScreenHeight() / 2.toFloat())
             delay(250)
             runMain { AssistsWindowManager.removeView(view) }
         }
-        return completableDeferred.await()
+        // 手势成功与否不决定返回值，以目标是否进入前台为准
+        completableDeferred.await()
+        return waitForForeground(packageName)
+    }
+
+    /**
+     * 轮询目标包名是否成为前台应用
+     * @param packageName 目标应用包名，空串时不轮询直接返回 true
+     * @param timeoutMs 最长等待时间
+     */
+    private suspend fun waitForForeground(
+        packageName: String,
+        timeoutMs: Long = 5_000L,
+    ): Boolean {
+        if (packageName.isEmpty()) return true
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline) {
+            val active = getPackageName(NodeLookupScope.ActiveWindow)
+            val all = getPackageName(NodeLookupScope.AllWindows)
+            LogUtils.d("GestureDiag waitForForeground pkg=$packageName active=$active all=$all")
+            if (active == packageName || all == packageName) {
+                return true
+            }
+            delay(200)
+        }
+        return false
     }
 
     /**
@@ -1172,13 +1435,17 @@ object AssistsCore {
     @RequiresApi(Build.VERSION_CODES.R)
     suspend fun takeScreenshot(): Bitmap? {
         val completableDeferred = CompletableDeferred<Bitmap?>()
-        AssistsService.instance?.takeScreenshot(Display.DEFAULT_DISPLAY, Executors.newSingleThreadExecutor(), object : TakeScreenshotCallback {
+        AssistsService.getOrNull()?.takeScreenshot(Display.DEFAULT_DISPLAY, Executors.newSingleThreadExecutor(), object : TakeScreenshotCallback {
             override fun onSuccess(screenshot: AccessibilityService.ScreenshotResult) {
                 Bitmap.wrapHardwareBuffer(
                     screenshot.hardwareBuffer,
                     screenshot.colorSpace
                 )?.let {
-                    completableDeferred.complete(it)
+
+                    // 转成软件 bitmap，调试器能查看
+                    val bitmap = it.copy(Bitmap.Config.ARGB_8888, false)
+
+                    completableDeferred.complete(bitmap)
                 } ?: let {
                     completableDeferred.complete(null)
                 }
@@ -1189,6 +1456,60 @@ object AssistsCore {
             }
         })
         return completableDeferred.await()
+    }
+
+    @RequiresApi(Build.VERSION_CODES.R)
+    suspend fun AccessibilityNodeInfo.getMD5(
+        scale: Float = 1f,          // 0 < scale <= 1
+        cornerRatio: Float = 0f,     // 0.0 ~ 1.0
+        file: File = File(PathUtils.getInternalAppFilesPath() + "/node-md5-temporary.png"),
+        format: CompressFormat = Bitmap.CompressFormat.PNG
+    ): String {
+        runCatching {
+            // 先保存节点的位置信息，确保使用一致的位置（避免多次调用getBoundsInScreen导致的位置变化）
+            val nodeBounds = getBoundsInScreen()
+
+            // 截取整个屏幕
+            val fullScreenshot = AssistsCore.takeScreenshot()
+            fullScreenshot ?: throw RuntimeException("bitmap is null")
+
+            // 从完整截图中裁剪出节点对应的区域（使用已保存的位置信息）
+            val nodeBitmap = Bitmap.createBitmap(
+                fullScreenshot,
+                nodeBounds.left,
+                nodeBounds.top,
+                nodeBounds.width(),
+                nodeBounds.height()
+            )
+
+            // 清理完整截图（不再需要）
+            fullScreenshot.recycle()
+
+            // 对裁剪后的bitmap进行处理（缩放和圆角）
+            val cropBitmap = BitmapUtils.cropCenterWithCornerRatio(
+                nodeBitmap,
+                scale = scale,
+                cornerRatio = cornerRatio
+            )
+
+            // 清理节点bitmap（如果和cropBitmap不同）
+            if (nodeBitmap != cropBitmap) {
+                nodeBitmap.recycle()
+            }
+
+            val result = ImageUtils.save(cropBitmap, file, format)
+            cropBitmap.recycle()
+
+            if (result) {
+                val md5 = FileUtils.getFileMD5ToString(file)
+                return md5
+            } else {
+                throw RuntimeException("save bitmap failed")
+            }
+        }.onFailure {
+            LogUtils.e(it)
+        }
+        return ""
     }
 
     /**
@@ -1210,6 +1531,277 @@ object AssistsCore {
             append("是否可用:$isEnabled \n")
             append("<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\n")
             Log.d(tag, toString())
+        }
+    }
+
+    /**
+     * 节点边界信息数据类
+     * 包含节点在屏幕中的位置和尺寸信息
+     */
+    data class NodeBounds(
+        val left: Int,
+        val top: Int,
+        val right: Int,
+        val bottom: Int,
+        val width: Int,
+        val height: Int,
+        val centerX: Int,
+        val centerY: Int,
+        val exactCenterX: Float,
+        val exactCenterY: Float,
+        val isEmpty: Boolean,
+    )
+
+    /**
+     * 节点树数据类
+     * 包含节点的所有属性和子节点列表，用于生成树形结构的JSON
+     */
+    data class NodeTree(
+        val packageName: String,
+        val text: String,
+        val des: String,
+        val viewId: String,
+        val className: String,
+        val isScrollable: Boolean,
+        val isClickable: Boolean,
+        val isEnabled: Boolean,
+        val boundsInScreen: NodeBounds,
+        val hintText: String,
+        val isCheckable: Boolean,
+        val isChecked: Boolean,
+        val isFocusable: Boolean,
+        val isFocused: Boolean,
+        val isLongClickable: Boolean,
+        val isPassword: Boolean,
+        val isSelected: Boolean,
+        val isVisibleToUser: Boolean,
+        val drawingOrder: Int,
+        val children: List<NodeTree>
+    )
+
+    /**
+     * 将AccessibilityNodeInfo转换为NodeBounds
+     * @return 节点边界信息
+     */
+    private fun AccessibilityNodeInfo.toNodeBounds(): NodeBounds {
+        val rect = getBoundsInScreen()
+        return NodeBounds(
+            left = rect.left,
+            top = rect.top,
+            right = rect.right,
+            bottom = rect.bottom,
+            width = rect.width(),
+            height = rect.height(),
+            centerX = rect.centerX(),
+            centerY = rect.centerY(),
+            exactCenterX = rect.exactCenterX(),
+            exactCenterY = rect.exactCenterY(),
+            isEmpty = rect.isEmpty
+        )
+    }
+
+    /**
+     * 将AccessibilityNodeInfo转换为NodeTree（递归包含子节点）
+     * @return 节点树对象
+     */
+    fun AccessibilityNodeInfo.toNodeTree(): NodeTree {
+        val children = mutableListOf<NodeTree>()
+        for (i in 0 until childCount) {
+            getChild(i)?.let { child ->
+                children.add(child.toNodeTree())
+            }
+        }
+
+        return NodeTree(
+            packageName = packageName?.toString() ?: "",
+            text = text?.toString() ?: "",
+            des = contentDescription?.toString() ?: "",
+            viewId = viewIdResourceName ?: "",
+            className = className?.toString() ?: "",
+            isScrollable = isScrollable,
+            isClickable = isClickable,
+            isEnabled = isEnabled,
+            boundsInScreen = toNodeBounds(),
+            hintText = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) hintText?.toString() ?: "" else "",
+            isCheckable = isCheckable,
+            isChecked = isChecked,
+            isFocusable = isFocusable,
+            isFocused = isFocused,
+            isLongClickable = isLongClickable,
+            isPassword = isPassword,
+            isSelected = isSelected,
+            isVisibleToUser = isVisibleToUser,
+            drawingOrder = drawingOrder,
+            children = children
+        )
+    }
+
+    /**
+     * 多窗口 [NodeLookupScope.AllWindows] 下 [getRootNodeTree] 使用的合成根（[className] 为 [MULTI_ROOT_CLASS_NAME]），子节点为各窗口根之 [toNodeTree]；与单活动窗口时仅一层根相比，JSON/树结构多一层
+     */
+    private fun buildMultiWindowRootNodeTree(roots: List<AccessibilityNodeInfo>): NodeTree {
+        val emptyBounds = NodeBounds(
+            left = 0,
+            top = 0,
+            right = 0,
+            bottom = 0,
+            width = 0,
+            height = 0,
+            centerX = 0,
+            centerY = 0,
+            exactCenterX = 0f,
+            exactCenterY = 0f,
+            isEmpty = true,
+        )
+        return NodeTree(
+            packageName = "multi_root",
+            text = "",
+            des = "",
+            viewId = "",
+            className = MULTI_ROOT_CLASS_NAME,
+            isScrollable = false,
+            isClickable = false,
+            isEnabled = true,
+            boundsInScreen = emptyBounds,
+            hintText = "",
+            isCheckable = false,
+            isChecked = false,
+            isFocusable = false,
+            isFocused = false,
+            isLongClickable = false,
+            isPassword = false,
+            isSelected = false,
+            isVisibleToUser = false,
+            drawingOrder = 0,
+            children = roots.map { it.toNodeTree() },
+        )
+    }
+
+    /**
+     * 获取当前窗口所有节点的树形结构
+     * @param scope 默认 [NodeLookupScope.ActiveWindow]；[NodeLookupScope.AllWindows] 且多根时为各窗口根 [toNodeTree] 之列表包在合成根下（[className] 为 [MULTI_ROOT_CLASS_NAME]），与单 [NodeLookupScope.ActiveWindow] 时 JSON 形状不同
+     * @return 根节点的NodeTree对象，如果获取失败则返回null
+     */
+    @JvmOverloads
+    fun getRootNodeTree(scope: NodeLookupScope = NodeLookupScope.ActiveWindow): NodeTree? {
+        return when (scope) {
+            NodeLookupScope.ActiveWindow -> {
+                getAccessibilityRootNodes(NodeLookupScope.ActiveWindow).firstOrNull()?.toNodeTree()
+            }
+            NodeLookupScope.AllWindows -> {
+                val roots = getAccessibilityRootNodes(NodeLookupScope.AllWindows)
+                when (roots.size) {
+                    0 -> null
+                    1 -> roots[0].toNodeTree()
+                    else -> buildMultiWindowRootNodeTree(roots)
+                }
+            }
+        }
+    }
+
+    private const val MULTI_ROOT_CLASS_NAME: String = "__assists_multi_root__"
+
+    /**
+     * 获取当前窗口所有节点的JSON字符串（树形结构）
+     * @param prettyPrint 是否格式化输出JSON，默认为false
+     * @param scope 与 [getRootNodeTree] 相同，默认 [NodeLookupScope.ActiveWindow]
+     * @return JSON字符串，如果获取失败则返回空字符串
+     */
+    @JvmOverloads
+    fun getRootNodeTreeJson(
+        prettyPrint: Boolean = false,
+        scope: NodeLookupScope = NodeLookupScope.ActiveWindow,
+    ): String {
+        val nodeTree = getRootNodeTree(scope) ?: return ""
+        val gson = if (prettyPrint) {
+            GsonBuilder().setPrettyPrinting().create()
+        } else {
+            Gson()
+        }
+        return gson.toJson(nodeTree)
+    }
+
+    /**
+     * 将指定节点及其所有子节点转换为JSON字符串（树形结构）
+     * @param prettyPrint 是否格式化输出JSON，默认为false
+     * @return JSON字符串
+     */
+    fun AccessibilityNodeInfo.toNodeTreeJson(prettyPrint: Boolean = false): String {
+        val nodeTree = toNodeTree()
+        val gson = if (prettyPrint) {
+            GsonBuilder().setPrettyPrinting().create()
+        } else {
+            Gson()
+        }
+        return gson.toJson(nodeTree)
+    }
+
+    /**
+     * 获取当前窗口所有节点的JSON字符串并保存到文件
+     * @param file 保存JSON的文件，默认为应用内部文件路径下的时间戳命名文件
+     * @param prettyPrint 是否格式化输出JSON，默认为true
+     * @param scope 与 [getRootNodeTree] 相同，默认 [NodeLookupScope.ActiveWindow]
+     * @return 保存成功时返回文件对象，失败时返回null
+     */
+    @JvmOverloads
+    fun saveRootNodeTreeJson(
+        file: File = File(PathUtils.getInternalAppFilesPath() + "/node_tree_${System.currentTimeMillis()}.json"),
+        prettyPrint: Boolean = true,
+        scope: NodeLookupScope = NodeLookupScope.ActiveWindow,
+    ): File? {
+        val json = getRootNodeTreeJson(prettyPrint, scope)
+        if (json.isEmpty()) return null
+        return runCatching {
+            file.parentFile?.mkdirs()
+            file.writeText(json)
+            file
+        }.getOrNull()
+    }
+
+    /**
+     * 获取剪贴板内容
+     * 如果应用在前台，直接获取剪贴板内容
+     * 如果应用在后台，启动透明Activity获取剪贴板内容
+     * @return 剪贴板文本内容，如果获取失败或为空则返回null
+     */
+    suspend fun getClipboardText(): CharSequence? {
+        return try {
+            // 判断应用是否在前台
+            val isAppForeground = AppUtils.isAppForeground()
+
+            if (isAppForeground) {
+                // 应用在前台，直接获取剪贴板
+                val text = ClipboardUtils.getText()
+                LogUtils.d(LOG_TAG, "getClipboardText (foreground): $text")
+                text
+            } else {
+                // 应用在后台，启动透明Activity获取剪贴板
+                LogUtils.d(LOG_TAG, "getClipboardText (background): 启动透明Activity")
+                val deferred = CompletableDeferred<CharSequence?>()
+                ClipboardActivity.setClipboardResult(deferred)
+
+                // 使用AssistsService的上下文启动Activity
+                AssistsService.getOrNull()?.let { service ->
+                    val intent = Intent(service, ClipboardActivity::class.java).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    service.startActivity(intent)
+
+                    // 等待Activity返回结果，设置超时时间为5秒
+                    val result = withTimeoutOrNull(2500) {
+                        deferred.await()
+                    }
+                    LogUtils.d(LOG_TAG, "getClipboardText (background result): $result")
+                    result
+                } ?: run {
+                    LogUtils.e(LOG_TAG, "getClipboardText: AssistsService.getOrNull() is null")
+                    deferred.complete(null)
+                    null
+                }
+            }
+        } catch (e: Exception) {
+            LogUtils.e(LOG_TAG, "getClipboardText error: ${e.message}")
+            null
         }
     }
 }

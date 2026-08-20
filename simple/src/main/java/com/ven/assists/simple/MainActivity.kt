@@ -14,11 +14,16 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.view.isVisible
 import com.blankj.utilcode.util.AppUtils
 import com.blankj.utilcode.util.BarUtils
+import com.blankj.utilcode.util.LogUtils
 import com.blankj.utilcode.util.PermissionUtils
 import com.blankj.utilcode.util.PermissionUtils.SimpleCallback
+import com.blankj.utilcode.util.TimeUtils
 import com.lxj.xpopup.XPopup
 import com.ven.assists.AssistsCore
 import com.ven.assists.AssistsCore.logNode
+import com.ven.assists.log.AssistsLog
+import com.ven.assists.log.AssistsLogDiagnostics
+import com.ven.assists.log.log
 import com.ven.assists.service.AssistsService
 import com.ven.assists.service.AssistsServiceListener
 import com.ven.assists.simple.databinding.ActivityMainBinding
@@ -26,12 +31,13 @@ import com.ven.assists.simple.overlays.OverlayAdvanced
 import com.ven.assists.simple.overlays.OverlayBasic
 import com.ven.assists.simple.overlays.OverlayLog
 import com.ven.assists.simple.overlays.OverlayPro
+import com.ven.assists.simple.overlays.OverlayStatusCard
 import com.ven.assists.simple.overlays.OverlayWeb
 import com.ven.assists.simple.step.Forward
 import com.ven.assists.simple.step.StepTag
 import com.ven.assists.stepper.StepManager
 import com.ven.assists.utils.CoroutineWrapper
-import com.ven.assists.utils.NodeClassValue
+import com.ven.assists.window.AssistsWindowManager.overlayToast
 import kotlinx.coroutines.delay
 import androidx.core.net.toUri
 import com.ven.assists.simple.step.ContactList
@@ -113,6 +119,29 @@ class MainActivity : AppCompatActivity(), AssistsServiceListener {
                     OverlayWeb.show()
                 }
             }
+            btnLog.setOnClickListener {
+                OverlayLog.onClose = {
+                    OverlayLog.hide()
+                }
+                if (OverlayLog.showed) {
+                    OverlayLog.hide()
+                } else {
+                    OverlayLog.show(clearLog = false, mainPageLogViewer = true)
+                }
+            }
+            btnTest.isVisible = AppUtils.isAppDebug()
+            btnTest.setOnClickListener {
+                OverlayStatusCard.onClose = {
+                    OverlayStatusCard.hide()
+                }
+                if (OverlayStatusCard.showed) {
+                    OverlayStatusCard.hide()
+                } else {
+
+                    OverlayStatusCard.show("")
+                }
+
+            }
         }
     }
     private val foregroundServiceIntent: Intent by lazy {
@@ -137,7 +166,7 @@ class MainActivity : AppCompatActivity(), AssistsServiceListener {
 
     private fun checkServiceEnable() {
         if (!isActivityResumed) return
-        if (AssistsCore.isAccessibilityServiceEnabled()) {
+        if (AssistsCore.isA11yEnabled()) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 startForegroundService(foregroundServiceIntent)
             }
@@ -153,7 +182,7 @@ class MainActivity : AppCompatActivity(), AssistsServiceListener {
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
         super.onAccessibilityEvent(event)
 //        if (event.eventType == AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED) {
-//
+//            LogUtils.d(event.text)
 //        }
     }
 

@@ -14,7 +14,6 @@ import android.view.ViewTreeObserver.OnGlobalLayoutListener
 import android.view.WindowManager
 import androidx.core.view.isInvisible
 import com.blankj.utilcode.util.ActivityUtils
-import com.blankj.utilcode.util.BarUtils
 import com.blankj.utilcode.util.ScreenUtils
 import com.blankj.utilcode.util.SizeUtils
 import com.blankj.utilcode.util.TimeUtils
@@ -96,15 +95,25 @@ object WindowMinimizeManager : AssistsServiceListener {
 
         var downTime = 0L
 
+        /** 触摸按下时窗口的X坐标，用于按增量更新避免跳变 */
+        private var downWindowX = 0
+
+        /** 触摸按下时窗口的Y坐标，用于按增量更新避免跳变 */
+        private var downWindowY = 0
+
         override fun onTouch(v: View?, event: MotionEvent): Boolean {
             if (event.action == MotionEvent.ACTION_DOWN) {
                 downTime = TimeUtils.getNowMills()
+                eventDownRawX = event.rawX.toInt()
+                eventDownRawY = event.rawY.toInt()
+                downWindowX = wmlp?.x ?: 0
+                downWindowY = wmlp?.y ?: 0
                 return true
             }
             if (event.action == MotionEvent.ACTION_MOVE) {
-                wmlp?.x = event.rawX.toInt()
+                wmlp?.x = downWindowX + (event.rawX.toInt() - eventDownRawX)
 
-                wmlp?.y = event.rawY.toInt() - BarUtils.getStatusBarHeight()
+                wmlp?.y = downWindowY + (event.rawY.toInt() - eventDownRawY)
                 wmlp?.let {
                     if (it.x < -((viewBinding?.root?.measuredWidth ?: 0) / 2)) {
                         it.x = -((viewBinding?.root?.measuredWidth ?: 0) / 2)
@@ -151,7 +160,7 @@ object WindowMinimizeManager : AssistsServiceListener {
         @SuppressLint("ClickableViewAccessibility")
         get() {
             if (field == null) {
-                field = MinimizeFloatingBinding.inflate(LayoutInflater.from(AssistsService.instance)).apply {
+                field = MinimizeFloatingBinding.inflate(LayoutInflater.from(AssistsService.getOrNull())).apply {
                     wmlp = AssistsWindowManager.createLayoutParams().apply {
                         width = -2
                         height = -2

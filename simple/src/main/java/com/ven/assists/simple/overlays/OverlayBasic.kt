@@ -4,17 +4,32 @@ import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
 import android.annotation.SuppressLint
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffXfermode
+import android.graphics.Rect
+import android.graphics.RectF
 import android.os.Build
 import android.view.LayoutInflater
 import android.view.View
+import android.view.WindowManager
+import android.view.accessibility.AccessibilityNodeInfo
 import com.blankj.utilcode.util.ActivityUtils
+import com.blankj.utilcode.util.AppUtils
 import com.blankj.utilcode.util.BarUtils
+import com.blankj.utilcode.util.ImageUtils
 import com.blankj.utilcode.util.LogUtils
+import com.blankj.utilcode.util.PathUtils
 import com.blankj.utilcode.util.ScreenUtils
 import com.blankj.utilcode.util.TimeUtils
+import com.blankj.utilcode.util.ToastUtils
+import com.lzy.okgo.OkGo
 import com.ven.assists.AssistsCore
 import com.ven.assists.AssistsCore.click
+import com.ven.assists.AssistsCore.getBoundsInScreen
 import com.ven.assists.AssistsCore.longClick
 import com.ven.assists.AssistsCore.longPressGestureAutoPaste
 import com.ven.assists.AssistsCore.nodeGestureClick
@@ -28,11 +43,18 @@ import com.ven.assists.window.AssistsWindowManager
 import com.ven.assists.window.AssistsWindowManager.overlayToast
 import com.ven.assists.window.AssistsWindowWrapper
 import com.ven.assists.simple.MultiTouchDrawingActivity
-import com.ven.assists.simple.ScreenshotReviewActivity
 import com.ven.assists.simple.TestActivity
 import com.ven.assists.simple.databinding.BasicOverlayBinding
+import com.ven.assists.utils.AudioPlayerUtil
 import com.ven.assists.utils.CoroutineWrapper
+import com.ven.assists.utils.FileDownloadUtil
 import kotlinx.coroutines.delay
+import rkr.simplekeyboard.inputmethod.latin.inputlogic.InputLogic
+import java.io.File
+import androidx.core.graphics.createBitmap
+import com.ven.assists.AssistsCore.getMD5
+import com.ven.assists.web.mlkit.MlkitScreenTextUtils
+import kotlin.math.log
 
 object OverlayBasic : AssistsServiceListener {
 
@@ -41,22 +63,28 @@ object OverlayBasic : AssistsServiceListener {
         private set
         get() {
             if (field == null) {
-                field = BasicOverlayBinding.inflate(LayoutInflater.from(AssistsService.instance)).apply {
+                field = BasicOverlayBinding.inflate(LayoutInflater.from(AssistsService.getOrNull())).apply {
+                    btnTest.visibility = if (AppUtils.isAppDebug()) View.VISIBLE else View.GONE
+                    btnTest.setOnClickListener {
+                        CoroutineWrapper.launch {
+                            val clipboardText = AssistsCore.getClipboardText()
+                            LogUtils.d(clipboardText)
+                        }
+                    }
                     //点击
                     btnClick.setOnClickListener {
-                        CoroutineWrapper.launch {
-                            AssistsService.instance?.startActivity(Intent(AssistsService.instance, TestActivity::class.java).apply {
+                        CoroutineWrapper.launch(isMain = true) {
+                            AssistsService.getOrNull()?.startActivity(Intent(AssistsService.getOrNull(), TestActivity::class.java).apply {
                                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
                             })
                             delay(1000)
                             AssistsCore.findById("com.ven.assists.demo:id/btn_test").firstOrNull()?.click()
                         }
-
                     }
                     //手势点击
                     btnGestureClick.setOnClickListener {
-                        CoroutineWrapper.launch {
-                            ActivityUtils.getTopActivity()?.startActivity(Intent(AssistsService.instance, TestActivity::class.java).apply {
+                        CoroutineWrapper.launch(isMain = true) {
+                            ActivityUtils.getTopActivity()?.startActivity(Intent(AssistsService.getOrNull(), TestActivity::class.java).apply {
                                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
                             })
                             delay(1000)
@@ -65,8 +93,8 @@ object OverlayBasic : AssistsServiceListener {
                     }
                     //长按
                     btnLongClick.setOnClickListener {
-                        CoroutineWrapper.launch {
-                            ActivityUtils.getTopActivity()?.startActivity(Intent(AssistsService.instance, TestActivity::class.java).apply {
+                        CoroutineWrapper.launch(isMain = true) {
+                            ActivityUtils.getTopActivity()?.startActivity(Intent(AssistsService.getOrNull(), TestActivity::class.java).apply {
                                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
                             })
                             delay(1000)
@@ -75,8 +103,8 @@ object OverlayBasic : AssistsServiceListener {
                     }
                     //手势长按
                     btnGestureLongClick.setOnClickListener {
-                        CoroutineWrapper.launch {
-                            ActivityUtils.getTopActivity()?.startActivity(Intent(AssistsService.instance, TestActivity::class.java).apply {
+                        CoroutineWrapper.launch(isMain = true) {
+                            ActivityUtils.getTopActivity()?.startActivity(Intent(AssistsService.getOrNull(), TestActivity::class.java).apply {
                                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
                             })
                             delay(1000)
@@ -87,7 +115,7 @@ object OverlayBasic : AssistsServiceListener {
                     btnGestureSingleDraw.setOnClickListener {
                         CoroutineWrapper.launch(isMain = true) {
                             ActivityUtils.getTopActivity()
-                                ?.startActivity(Intent(AssistsService.instance, MultiTouchDrawingActivity::class.java).apply {
+                                ?.startActivity(Intent(AssistsService.getOrNull(), MultiTouchDrawingActivity::class.java).apply {
                                     flags = Intent.FLAG_ACTIVITY_NEW_TASK
                                 })
                             delay(1000)
@@ -99,7 +127,7 @@ object OverlayBasic : AssistsServiceListener {
                     btnGestureDoubleDraw.setOnClickListener {
                         CoroutineWrapper.launch(isMain = true) {
                             ActivityUtils.getTopActivity()
-                                ?.startActivity(Intent(AssistsService.instance, MultiTouchDrawingActivity::class.java).apply {
+                                ?.startActivity(Intent(AssistsService.getOrNull(), MultiTouchDrawingActivity::class.java).apply {
                                     flags = Intent.FLAG_ACTIVITY_NEW_TASK
                                 })
                             delay(1000)
@@ -111,7 +139,7 @@ object OverlayBasic : AssistsServiceListener {
                     btnGestureThreeDraw.setOnClickListener {
                         CoroutineWrapper.launch(isMain = true) {
                             ActivityUtils.getTopActivity()
-                                ?.startActivity(Intent(AssistsService.instance, MultiTouchDrawingActivity::class.java).apply {
+                                ?.startActivity(Intent(AssistsService.getOrNull(), MultiTouchDrawingActivity::class.java).apply {
                                     flags = Intent.FLAG_ACTIVITY_NEW_TASK
                                 })
                             delay(1000)
@@ -122,7 +150,7 @@ object OverlayBasic : AssistsServiceListener {
                     //选择文本
                     btnSelectText.setOnClickListener {
                         CoroutineWrapper.launch(isMain = true) {
-                            ActivityUtils.getTopActivity()?.startActivity(Intent(AssistsService.instance, TestActivity::class.java).apply {
+                            ActivityUtils.getTopActivity()?.startActivity(Intent(AssistsService.getOrNull(), TestActivity::class.java).apply {
                                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
                             })
                             delay(1000)
@@ -139,7 +167,7 @@ object OverlayBasic : AssistsServiceListener {
                     //修改文本
                     btnChangeText.setOnClickListener {
                         CoroutineWrapper.launch(isMain = true) {
-                            ActivityUtils.getTopActivity()?.startActivity(Intent(AssistsService.instance, TestActivity::class.java).apply {
+                            ActivityUtils.getTopActivity()?.startActivity(Intent(AssistsService.getOrNull(), TestActivity::class.java).apply {
                                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
                             })
                             delay(1000)
@@ -154,7 +182,7 @@ object OverlayBasic : AssistsServiceListener {
                     //向前滚动
                     btnListScroll.setOnClickListener {
                         CoroutineWrapper.launch(isMain = true) {
-                            ActivityUtils.getTopActivity()?.startActivity(Intent(AssistsService.instance, TestActivity::class.java).apply {
+                            ActivityUtils.getTopActivity()?.startActivity(Intent(AssistsService.getOrNull(), TestActivity::class.java).apply {
                                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
                             })
                             delay(1000)
@@ -175,7 +203,7 @@ object OverlayBasic : AssistsServiceListener {
                     //向后滚动
                     btnListScrollBack.setOnClickListener {
                         CoroutineWrapper.launch(isMain = true) {
-                            ActivityUtils.getTopActivity()?.startActivity(Intent(AssistsService.instance, TestActivity::class.java).apply {
+                            ActivityUtils.getTopActivity()?.startActivity(Intent(AssistsService.getOrNull(), TestActivity::class.java).apply {
                                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
                             })
                             delay(1000)
@@ -206,37 +234,37 @@ object OverlayBasic : AssistsServiceListener {
                     btnNotification.setOnClickListener { AssistsCore.notifications() }
 
                     btnPowerDialog.setOnClickListener {
-                        AssistsService.instance?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_POWER_DIALOG)
+                        AssistsService.getOrNull()?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_POWER_DIALOG)
 
                     }
                     btnToggleSplitScreen.setOnClickListener {
-                        AssistsService.instance?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_TOGGLE_SPLIT_SCREEN)
+                        AssistsService.getOrNull()?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_TOGGLE_SPLIT_SCREEN)
 
                     }
                     btnLockScreen.setOnClickListener {
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                            AssistsService.instance?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_LOCK_SCREEN)
+                            AssistsService.getOrNull()?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_LOCK_SCREEN)
                         } else {
                             "仅支持Android9及以上版本".overlayToast()
                         }
                     }
                     btnTakeScreenshot.setOnClickListener {
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                            AssistsService.instance?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_TAKE_SCREENSHOT)
+                            AssistsService.getOrNull()?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_TAKE_SCREENSHOT)
                         } else {
                             "仅支持Android9及以上版本".overlayToast()
                         }
                     }
                     btn1.setOnClickListener {
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                            AssistsService.instance?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_KEYCODE_HEADSETHOOK)
+                            AssistsService.getOrNull()?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_KEYCODE_HEADSETHOOK)
                         } else {
                             "仅支持Android12及以上版本".overlayToast()
                         }
                     }
                     btn2.setOnClickListener {
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                            AssistsService.instance?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_ACCESSIBILITY_ALL_APPS)
+                            AssistsService.getOrNull()?.performGlobalAction(AccessibilityService.GLOBAL_ACTION_ACCESSIBILITY_ALL_APPS)
                         } else {
                             "仅支持Android12及以上版本".overlayToast()
                         }
@@ -298,6 +326,29 @@ object OverlayBasic : AssistsServiceListener {
         viewBinding = null
         assistWindowWrapper = null
     }
+
+    fun cropCircleBitmap(src: Bitmap): Bitmap {
+        val size = minOf(src.width, src.height)
+        val output = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+
+        val canvas = Canvas(output)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+
+        val rect = Rect(0, 0, size, size)
+        val rectF = RectF(rect)
+
+        // 画圆
+        canvas.drawOval(rectF, paint)
+
+        // SRC_IN 把圆外的区域裁掉
+        paint.xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_IN)
+        canvas.drawBitmap(src, null, rect, paint)
+
+        paint.xfermode = null
+
+        return output
+    }
+
 
     suspend fun performCircularGestureSingle() {
         val screenWidth = ScreenUtils.getScreenWidth()

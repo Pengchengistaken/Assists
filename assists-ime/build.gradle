@@ -1,0 +1,36 @@
+plugins {
+    id 'com.android.library'
+    id 'org.jetbrains.kotlin.android'
+    id 'com.vanniktech.maven.publish'
+}
+
+android {
+    namespace 'rkr.simplekeyboard.inputmethod'
+    compileSdk rootProject.ext.compileSdk
+
+    defaultConfig {
+        minSdk 23
+        targetSdk rootProject.ext.targetSdk
+    }
+    buildTypes {
+        release {
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+}
+
+dependencies {
+}
+
+ext {
+    mavenArtifactId = 'assists-ime'
+    mavenPomName = 'Assists IME'
+    mavenPomDescription = 'Custom input method library for Assists automation framework'
+}
+apply from: rootProject.file('gradle/publish-maven-central.gradle')

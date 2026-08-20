@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <uses-permission android:name="android.permission.WRITE_CONTACTS" />
+
     <application>
         <provider
             android:name="com.ven.assists.utils.AssistsFileProvider"
@@ -11,6 +14,14 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/assists_provider_paths" />
         </provider>
+        
+        <activity
+            android:name="com.ven.assists.ui.ClipboardActivity"
+            android:theme="@style/TransparentActivityTheme"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTask"
+            android:taskAffinity="" />
 
     </application>
 </manifest>
