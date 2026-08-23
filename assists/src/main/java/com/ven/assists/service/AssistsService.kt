@@ -20,6 +20,7 @@ import java.util.Collections
  */
 open class AssistsService : AccessibilityService() {
     private var screenWakeLock: PowerManager.WakeLock? = null
+    private var wakeLockHeldByAutomation = false
 
     companion object {
         @Volatile
@@ -53,6 +54,24 @@ open class AssistsService : AccessibilityService() {
          */
         val listeners: MutableList<AssistsServiceListener> = Collections.synchronizedList(arrayListOf<AssistsServiceListener>())
 
+        /**
+         * Forward 等自动化任务执行期间按需持有屏幕常亮；空闲时不持有。
+         */
+        @JvmStatic
+        fun acquireScreenWakeLock() {
+            getOrNull()?.acquireWakeLockInternal()
+        }
+
+        @JvmStatic
+        fun releaseScreenWakeLock() {
+            getOrNull()?.releaseWakeLockInternal()
+        }
+
+        @JvmStatic
+        fun isScreenWakeLockHeld(): Boolean {
+            return getOrNull()?.wakeLockHeldByAutomation == true
+        }
+
 //        val onAccessibilityEventFlow =
 //            MutableSharedFlow<AccessibilityEvent>(replay = 0, extraBufferCapacity = 64, onBufferOverflow = BufferOverflow.DROP_OLDEST)
 //        val onServiceConnectedFlow =
@@ -78,11 +97,6 @@ open class AssistsService : AccessibilityService() {
         serviceRef = this
         AssistsWindowManager.init(this)
         runCatching { listeners.forEach { it.onServiceConnected(this) } }
-        runCatching {
-            screenWakeLock = (getSystemService(Context.POWER_SERVICE) as PowerManager)
-                .newWakeLock(PowerManager.SCREEN_BRIGHT_WAKE_LOCK, "Assists:KeepScreenOn")
-            screenWakeLock?.acquire()
-        }
         LogUtils.d(AssistsCore.LOG_TAG, "assists service on service connected")
     }
 
@@ -103,10 +117,8 @@ open class AssistsService : AccessibilityService() {
      * @return 是否调用父类的onUnbind方法
      */
     override fun onUnbind(intent: Intent?): Boolean {
-        runCatching {
-            screenWakeLock?.release()
-            screenWakeLock = null
-        }
+        releaseWakeLockInternal()
+        screenWakeLock = null
         serviceRef = null
         runCatching { listeners.forEach { it.onUnbind() } }
         return super.onUnbind(intent)
@@ -121,10 +133,28 @@ open class AssistsService : AccessibilityService() {
     }
 
     override fun onDestroy() {
-        runCatching {
-            screenWakeLock?.release()
-            screenWakeLock = null
-        }
+        releaseWakeLockInternal()
         super.onDestroy()
+    }
+
+    private fun acquireWakeLockInternal() {
+        runCatching {
+            if (screenWakeLock == null) {
+                screenWakeLock = (getSystemService(Context.POWER_SERVICE) as PowerManager)
+                    .newWakeLock(PowerManager.SCREEN_DIM_WAKE_LOCK, "Assists:Automation")
+            }
+            if (wakeLockHeldByAutomation) return@runCatching
+            screenWakeLock?.acquire(10 * 60 * 60 * 1000L)
+            wakeLockHeldByAutomation = true
+        }
+    }
+
+    private fun releaseWakeLockInternal() {
+        runCatching {
+            if (screenWakeLock?.isHeld == true) {
+                screenWakeLock?.release()
+            }
+            wakeLockHeldByAutomation = false
+        }
     }
 }

@@ -60,7 +60,7 @@ class ForegroundService : Service() {
 
         return NotificationCompat.Builder(this, channelId)
             .setContentTitle("服务运行中")
-            .setContentText("Assists保持运行中…")
+            .setContentText("应用后台服务")
             .setSmallIcon(R.mipmap.ic_launcher)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()

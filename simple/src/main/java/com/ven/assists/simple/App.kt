@@ -20,6 +20,7 @@ class App : Application() {
         applyUploadKeyFromAssetsEnv()
         //设置全局步骤默认间隔时长
         StepManager.DEFAULT_STEP_DELAY = 1000L
+        com.ven.assists.simple.guard.AntiBanGuard.load()
     }
 
     /**

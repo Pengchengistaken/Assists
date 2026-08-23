@@ -40,6 +40,9 @@ import com.ven.assists.utils.CoroutineWrapper
 import com.ven.assists.window.AssistsWindowManager.overlayToast
 import kotlinx.coroutines.delay
 import androidx.core.net.toUri
+import com.ven.assists.simple.guard.AntiBanConfig
+import com.ven.assists.simple.guard.AntiBanGuard
+import com.ven.assists.simple.guard.ForwardNotificationListener
 import com.ven.assists.simple.step.ContactList
 
 
@@ -93,20 +96,19 @@ class MainActivity : AppCompatActivity(), AssistsServiceListener {
                                 ContactList.sourceRobotNames = finalUserNames
                                 // 保存设置
                                 ContactList.saveSettings(this@MainActivity)
-                                // 显示悬浮窗并开始执行
-                                OverlayLog.show()
-                                StepManager.execute(Forward::class.java, StepTag.STEP_1, begin = true)
+                                startForwardAutomation()
                             }.show()
                         }.show()
                     },
                     {
-                        // 用户选择使用当前设置
-                        OverlayLog.show()
-                        StepManager.execute(Forward::class.java, StepTag.STEP_1, begin = true)
+                        startForwardAutomation()
                     }
                 ).setConfirmText("修改设置")
                 .setCancelText("使用当前设置")
                 .show()
+            }
+            btnAntiban.setOnClickListener {
+                showAntiBanSettingsDialog()
             }
             btnWeb.setOnClickListener {
                 OverlayWeb.onClose = {
@@ -199,15 +201,66 @@ class MainActivity : AppCompatActivity(), AssistsServiceListener {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // 设置屏幕常亮
-        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        if (AppUtils.isAppDebug()) {
+            window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
         BarUtils.setStatusBarLightMode(this, true)
         setContentView(viewBind.root)
         AssistsService.listeners.add(this)
         checkPermission()
 
-        // 加载保存的设置
         ContactList.loadSettings(this)
+        AntiBanGuard.load()
+    }
+
+    private fun startForwardAutomation() {
+        when (AntiBanGuard.assertAllowed()) {
+            is AntiBanGuard.GuardResult.Blocked -> {
+                XPopup.Builder(this).asConfirm(
+                    "防封限制",
+                    "当前不满足运行条件，是否仍要启动？\n建议使用「防封设置」查看 Strict 预设。",
+                    { doStartForward() },
+                    null,
+                ).show()
+            }
+            is AntiBanGuard.GuardResult.Allowed -> doStartForward()
+        }
+    }
+
+    private fun doStartForward() {
+        ForwardNotificationListener.register()
+        OverlayLog.show()
+        StepManager.isStop = false
+        StepManager.execute(Forward::class.java, StepTag.STEP_1, begin = true)
+    }
+
+    private fun showAntiBanSettingsDialog() {
+        val presets = AntiBanConfig.Preset.entries.map { it.name }.toTypedArray()
+        val currentIndex = AntiBanConfig.Preset.entries.indexOf(AntiBanConfig.preset).coerceAtLeast(0)
+        XPopup.Builder(this).asCenterList(
+            "防封预设（当前：${AntiBanConfig.preset.name}）",
+            presets,
+            null,
+            currentIndex,
+        ) { _, text ->
+            runCatching { AntiBanConfig.preset = AntiBanConfig.Preset.valueOf(text) }
+            AntiBanGuard.load()
+            val t = AntiBanConfig.thresholds
+            val dailyLabel = if (AntiBanConfig.isDailyForwardUnlimited()) {
+                "无限制"
+            } else {
+                "${t.dailyForwardMax}"
+            }
+            XPopup.Builder(this@MainActivity).asConfirm(
+                "已切换为 $text",
+                "运行窗口 ${AntiBanConfig.activeWindowLabel()}\n" +
+                    "日上限 $dailyLabel / 小时 ${t.hourlyForwardMax}\n" +
+                    "轮询 ${t.pollIntervalSecLow}–${t.pollIntervalSecHigh}s\n" +
+                    "今日已转发 ${AntiBanConfig.dailyForwardCount()} 次",
+                null,
+                null,
+            ).show()
+        }.show()
     }
 
     private fun checkPermission() {

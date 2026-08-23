@@ -4,17 +4,16 @@ import android.content.ComponentName
 import android.content.Intent
 import android.util.Log
 import com.ven.assists.AssistsCore
-import com.ven.assists.AssistsCore.click
 import com.ven.assists.AssistsCore.findFirstParentClickable
 import com.ven.assists.AssistsCore.getBoundsInScreen
 import com.ven.assists.AssistsCore.getNodes
 import com.ven.assists.AssistsCore.longClick
-import com.ven.assists.AssistsCore.nodeGestureClickByDouble
 import com.ven.assists.AssistsCore.scrollForward
-import com.ven.assists.AssistsCore.setNodeText
 import com.ven.assists.service.AssistsService
 import com.ven.assists.log.logAppend
 import com.ven.assists.simple.constants.WechatResourceIds
+import com.ven.assists.simple.guard.AntiBanGuard
+import com.ven.assists.simple.guard.ForwardNotificationListener
 import com.ven.assists.simple.overlays.OverlayLog
 import com.ven.assists.stepper.Step
 import com.ven.assists.stepper.StepCollector
@@ -49,11 +48,12 @@ class Forward : StepImpl() {
         }
 
         fun toggleDebug() {
-            DEBUG = !DEBUG
+            DEBUG = ForwardAntiBan.toggleDebugFlag()
             ("Debug模式已${if (DEBUG) "开启" else "关闭"}").logAppend()
-            // 通知按钮颜色变化
             OverlayLog.updateDebugButtonColor(DEBUG)
         }
+
+        fun isRunning(): Boolean = ForwardAntiBan.isRunning()
 
         private fun resetRetryCount() {
             retryCount = 0
@@ -301,18 +301,14 @@ class Forward : StepImpl() {
      * 判断当前是否在微信主页面
      * @return 是否在微信主页面
      */
-    private fun isWechatMainPage(): Boolean {
-        val nodes = AssistsCore.getAllNodes()
-        // 检查是否在通讯录页面
+    private suspend fun isWechatMainPage(): Boolean {
         val isInContactPage = findTextViewByIdAndText(WechatResourceIds.ICON_TV, WechatResourceIds.ButtonTexts.CONTACTS) != null
-        
+
         if (isInContactPage) {
-            // 如果在通讯录页面，点击微信切换到主页面
             val wechatTab = findTextViewByIdAndText(WechatResourceIds.ICON_TV, WechatResourceIds.ButtonTexts.WECHAT)
-            wechatTab?.findFirstParentClickable()?.click()
+            ForwardAntiBan.humanClickParent(wechatTab)
         }
-        
-        // 检查是否在微信主页面
+
         return findTextViewByIdAndText(WechatResourceIds.TEXT1, WechatResourceIds.ButtonTexts.WECHAT) != null
     }
 
@@ -347,6 +343,13 @@ class Forward : StepImpl() {
     override fun onImpl(collector: StepCollector) {
         //1. 打开微信
         collector.next(StepTag.STEP_1, isRunCoroutineIO = true) {
+            if (!ForwardAntiBan.ensureGuardAllowed()) {
+                return@next ForwardAntiBan.enterDeepSleep()
+            }
+            ForwardAntiBan.markRunning(true)
+            ForwardNotificationListener.register()
+            AssistsService.acquireScreenWakeLock()
+            AntiBanGuard.onForwardSessionStart()
             setLastStep(StepTag.STEP_1)
             ("STEP_1: 开始执行 - 启动微信").logAppend()
             ("启动微信").logAppend()
@@ -356,7 +359,7 @@ class Forward : StepImpl() {
                 component = ComponentName("com.tencent.mm", "com.tencent.mm.ui.LauncherUI")
                 AssistsService.instance?.startActivity(this)
             }
-            return@next Step.get(StepTag.STEP_1001, delay = 1000)
+            return@next Step.get(StepTag.STEP_1001, delay = ForwardAntiBan.stepDelayMs())
         }
 
         //1001. 获取联系人列表
@@ -368,14 +371,14 @@ class Forward : StepImpl() {
             val contactTab = findTextViewByIdAndText(WechatResourceIds.ICON_TV, WechatResourceIds.ButtonTexts.CONTACTS)
             
             if (contactTab != null) {
-                ("已找到通讯录按钮，1秒后点击").logAppend()
-                delay(1000)
-                contactTab.findFirstParentClickable()?.click()
-                return@next Step.get(StepTag.STEP_1002, delay = 1000)
+                ("已找到通讯录按钮，准备点击").logAppend()
+                ForwardAntiBan.maybeStepPause()
+                ForwardAntiBan.humanClickParent(contactTab)
+                return@next Step.get(StepTag.STEP_1002, delay = ForwardAntiBan.stepDelayMs())
             }
             
             ("未找到通讯录按钮，重试").logAppend()
-            return@next Step.get(StepTag.STEP_1001, delay = 1000)
+            return@next Step.get(StepTag.STEP_1001, delay = ForwardAntiBan.stepDelayMs())
         }
 
         //1002. 点击群聊
@@ -386,14 +389,14 @@ class Forward : StepImpl() {
             val groupChat = findTextViewByIdAndText(WechatResourceIds.N9, WechatResourceIds.ButtonTexts.GROUP_CHAT)
             
             if (groupChat != null) {
-                ("已找到群聊按钮，1秒后点击").logAppend()
-                delay(1000)
-                groupChat.findFirstParentClickable()?.click()
-                return@next Step.get(StepTag.STEP_1003, delay = 1000)
+                ("已找到群聊按钮，准备点击").logAppend()
+                ForwardAntiBan.maybeStepPause()
+                ForwardAntiBan.humanClickParent(groupChat)
+                return@next Step.get(StepTag.STEP_1003, delay = ForwardAntiBan.stepDelayMs())
             }
             
             ("未找到群聊按钮，重试").logAppend()
-            return@next Step.get(StepTag.STEP_1002, delay = 1000)
+            return@next Step.get(StepTag.STEP_1002, delay = ForwardAntiBan.stepDelayMs())
         }
 
         //1003. 遍历群聊列表
@@ -433,14 +436,14 @@ class Forward : StepImpl() {
             val tagButton = findTextViewByIdAndText(WechatResourceIds.N9, WechatResourceIds.ButtonTexts.TAG)
             
             if (tagButton != null) {
-                ("已找到标签按钮，1秒后点击").logAppend()
-                delay(1000)
-                tagButton.findFirstParentClickable()?.click()
-                return@next Step.get(StepTag.STEP_1005, delay = 1000)
+                ("已找到标签按钮，准备点击").logAppend()
+                ForwardAntiBan.maybeStepPause()
+                ForwardAntiBan.humanClickParent(tagButton)
+                return@next Step.get(StepTag.STEP_1005, delay = ForwardAntiBan.stepDelayMs())
             }
             
             ("未找到标签按钮，重试").logAppend()
-            return@next Step.get(StepTag.STEP_1004, delay = 1000)
+            return@next Step.get(StepTag.STEP_1004, delay = ForwardAntiBan.stepDelayMs())
         }
 
         //1005. 点击转发
@@ -451,14 +454,14 @@ class Forward : StepImpl() {
             val forwardButton = findTextViewByIdAndText(WechatResourceIds.HS8, WechatResourceIds.ButtonTexts.FORWARD)
             
             if (forwardButton != null) {
-                ("已找到转发按钮，1秒后点击").logAppend()
-                delay(1000)
-                forwardButton.findFirstParentClickable()?.click()
-                return@next Step.get(StepTag.STEP_1006, delay = 1000)
+                ("已找到转发按钮，准备点击").logAppend()
+                ForwardAntiBan.maybeStepPause()
+                ForwardAntiBan.humanClickParent(forwardButton)
+                return@next Step.get(StepTag.STEP_1006, delay = ForwardAntiBan.stepDelayMs())
             }
             
             ("未找到转发按钮，重试").logAppend()
-            return@next Step.get(StepTag.STEP_1005, delay = 1000)
+            return@next Step.get(StepTag.STEP_1005, delay = ForwardAntiBan.stepDelayMs())
         }
 
         //1006. 获取转发页面的联系人
@@ -480,86 +483,80 @@ class Forward : StepImpl() {
             // 返回主页面
             if (checkBackToWechatMain()) {
                 ("已返回微信主页面").logAppend()
-                return@next Step.get(StepTag.STEP_2, delay = 1000)
+                return@next Step.get(StepTag.STEP_2, delay = ForwardAntiBan.stepDelayMs())
             }
             
             ("未能返回微信主页面，重试").logAppend()
-            return@next Step.get(StepTag.STEP_1006, delay = 1000)
+            return@next Step.get(StepTag.STEP_1006, delay = ForwardAntiBan.stepDelayMs())
         }
 
         //2. 点击聊天列表中的京东线报交流群
         collector.next(StepTag.STEP_2) { step ->
+            if (!ForwardAntiBan.ensureGuardAllowed()) {
+                return@next ForwardAntiBan.enterDeepSleep()
+            }
+            AssistsService.acquireScreenWakeLock()
             setLastStep(StepTag.STEP_2)
             ("STEP_2: 开始执行 - 查找并点击京东线报交流群。").logAppend()
 
-            // 先判断是否在微信主页面
             if (!isWechatMainPage()) {
                 ("当前不在微信主页面，尝试返回主页面。").logAppend()
                 if (checkBackToWechatMain()) {
                     ("已在微信主页面。").logAppend()
                 } else {
                     ("未能返回微信主页面，重新启动微信。").logAppend()
-                    return@next Step.get(StepTag.STEP_1, delay = 1000)
+                    return@next Step.get(StepTag.STEP_1, delay = ForwardAntiBan.stepDelayMs())
                 }
             }
 
-            // 双击底部Tab"微信"
             val tabNodes = AssistsCore.getAllNodes().filter {
                 it.className == WechatResourceIds.NodeClasses.TEXT_VIEW
                         && it.viewIdResourceName == WechatResourceIds.ICON_TV
                         && it.text?.toString() == WechatResourceIds.ButtonTexts.WECHAT
             }
-            
+
             if (tabNodes.isNotEmpty()) {
-                val wechatTab = tabNodes.first()
-                wechatTab.findFirstParentClickable()?.let { parent ->
-                    parent.click()
-                    Thread.sleep(100)
-                    parent.click()
-                    ("已双击底部Tab微信").logAppend()
-                }
+                ForwardAntiBan.humanDoubleClickParent(tabNodes.first())
+                ("已双击底部Tab微信").logAppend()
             }
-            // 查找所有聊天行（每一行的 LinearLayout，id=cj0）
+
             val allRows = AssistsCore.getAllNodes().filter {
                 it.className == WechatResourceIds.NodeClasses.LINEAR_LAYOUT && it.viewIdResourceName == WechatResourceIds.CJ0
             }
 
-            // 遍历每一行，递归查找 a_h（小红点） 和 kbq（群名）
             for (row in allRows) {
-                val allDescendants = row.getNodes() // 递归获取所有后代节点
-                val hasAh = allDescendants.any { it.viewIdResourceName == WechatResourceIds.A_H } // 小红点
+                val allDescendants = row.getNodes()
+                val hasAh = allDescendants.any { it.viewIdResourceName == WechatResourceIds.A_H }
                 val kbqNode = allDescendants.find {
-                    it.viewIdResourceName == WechatResourceIds.KBQ && (it.text?.contains(ContactList.sourceGroupName) == true) // 群名
+                    it.viewIdResourceName == WechatResourceIds.KBQ && (it.text?.contains(ContactList.sourceGroupName) == true)
                 }
                 val ht5Node = allDescendants.find {
-                    it.viewIdResourceName == WechatResourceIds.HT5 && (it.text?.contains(WechatResourceIds.ButtonTexts.FOLLOWED_PEOPLE) == true) // 关注的人
+                    it.viewIdResourceName == WechatResourceIds.HT5 && (it.text?.contains(WechatResourceIds.ButtonTexts.FOLLOWED_PEOPLE) == true)
                 }
-                if (DEBUG && kbqNode != null) { //调试：不需要小红点
+                if (ForwardAntiBan.isDebugEnabled() && kbqNode != null) {
                     ("DEBUG 模式，跳过小红点").logAppend()
-                    kbqNode.findFirstParentClickable()?.click()
+                    ForwardAntiBan.humanClickParent(kbqNode)
                     ("已找到并点击京东线报交流群").logAppend()
-                    return@next Step.get(StepTag.STEP_3, delay = 1000)
+                    ForwardAntiBan.pauseBeforeReadChat()
+                    return@next Step.get(StepTag.STEP_3, delay = ForwardAntiBan.stepDelayMs())
                 } else if (hasAh && kbqNode != null && ht5Node != null) {
-                    ("京东线报交流群有新消息且包含关注的人，1分钟后点击并进入执行。").logAppend()
-                    // 倒计时刷新
-                    for (secondsLeft in 60 downTo 1) {
-                        ("距离点击还有 $secondsLeft 秒...").logAppend()
-                        delay(1000)
+                    ("京东线报交流群有新消息且包含关注的人，随机延迟后进入。").logAppend()
+                    AntiBanGuard.randomPreClickDelay { left ->
+                        ("距离点击还有 ${left} 秒...").logAppend()
                     }
-                    kbqNode.findFirstParentClickable()?.click()
-                    return@next Step.get(StepTag.STEP_3)
+                    ForwardAntiBan.humanClickParent(kbqNode)
+                    ForwardAntiBan.pauseBeforeReadChat()
+                    return@next Step.get(StepTag.STEP_3, delay = ForwardAntiBan.stepDelayMs())
                 }
             }
-            if (DEBUG) {
-                ("DEBUG 模式，5秒钟后再检查。").logAppend()
-                return@next Step.get(StepTag.STEP_2, delay = 5000)
+
+            if (ForwardAntiBan.isDebugEnabled()) {
+                ("DEBUG 模式，慢轮询后再检查。").logAppend()
+                return@next ForwardAntiBan.enterDeepSleep()
             }
-            // 倒计时刷新，加入提示每剩余多少秒
-            for (secondsLeft in 30 downTo 1) {
-                ("群里没有新消息, 距离下次检查还有 $secondsLeft 秒...").logAppend()
-                delay(1000)
-            }
-            return@next Step.get(StepTag.STEP_2)
+
+            ("群里没有新消息，进入 Deep Sleep。").logAppend()
+            return@next ForwardAntiBan.enterDeepSleep()
         }
 
         //3. 获取最后一张图片
@@ -676,21 +673,21 @@ class Forward : StepImpl() {
             if (targetImageNode == null) {
                 ("未找到线报员的图片消息，返回。").logAppend()
                 if (checkBackToWechatMain()) {
-                    ("返回微信主页面，30秒后重试。").logAppend()
-                    return@next Step.get(StepTag.STEP_2, delay = 30000)
+                    ("返回微信主页面，进入 Deep Sleep。").logAppend()
+                    return@next ForwardAntiBan.enterDeepSleep()
                 } else {
-                    return@next Step.get(StepTag.STEP_2, delay = 30000)
+                    return@next ForwardAntiBan.enterDeepSleep()
                 }
             }
 
             // 3. 检查时间戳是否发生变化
-            if (!DEBUG && !checkMessageTime(currentMessageTime)) {
+            if (!ForwardAntiBan.isDebugEnabled() && !checkMessageTime(currentMessageTime)) {
                 ("消息时间未变化，无需转发。").logAppend()
                 if (checkBackToWechatMain()) {
-                    ("返回微信主页面，30秒后重试。").logAppend()
-                    return@next Step.get(StepTag.STEP_2, delay = 30000)
+                    ("返回微信主页面，进入 Deep Sleep。").logAppend()
+                    return@next ForwardAntiBan.enterDeepSleep()
                 } else {
-                    return@next Step.get(StepTag.STEP_2, delay = 30000)
+                    return@next ForwardAntiBan.enterDeepSleep()
                 }
             }
 
@@ -699,7 +696,7 @@ class Forward : StepImpl() {
             // 4. 点击图片
             if (targetImageNode?.isVisibleToUser!! && targetImageNode.isLongClickable && targetImageNode.isEnabled) {
                 ("节点可交互。").logAppend()
-                if (targetImageNode.click()) {
+                if (ForwardAntiBan.humanClick(targetImageNode)) {
                     ("点击一下，打开图片。").logAppend()
                     ("延迟 3 秒，充分等待").logAppend()
                     delay(3000)
@@ -759,11 +756,11 @@ class Forward : StepImpl() {
                 val forwardTextNode = forwardTextNodes.first()
                 val clickableParent = forwardTextNode.findFirstParentClickable()
                 if (clickableParent != null) {
-                    ("延迟 1 秒。").logAppend()
-                    delay(1000)
-                    clickableParent.click()
+                    ("延迟后点击转发按钮。").logAppend()
+                    ForwardAntiBan.maybeStepPause()
+                    ForwardAntiBan.humanClick(clickableParent)
                     ("已点击转发按钮").logAppend()
-                    return@next Step.get(StepTag.STEP_6)
+                    return@next Step.get(StepTag.STEP_6, delay = ForwardAntiBan.stepDelayMs())
                 }
             } else {
                 ("未找到转发按钮，重试").logAppend()
@@ -788,12 +785,12 @@ class Forward : StepImpl() {
                         && it.isClickable
             }
             if (multiSelectNode != null) {
-                ("已定位到多选按钮，1秒后点击。").logAppend()
-                delay(1000)
-                multiSelectNode.click()
+                ("已定位到多选按钮，准备点击。").logAppend()
+                ForwardAntiBan.maybeStepPause()
+                ForwardAntiBan.humanClick(multiSelectNode)
                 ("已点击多选按钮").logAppend()
-                resetGroupIndex() // 重置群组索引
-                return@next Step.get(StepTag.STEP_7, delay = 1000)
+                resetGroupIndex()
+                return@next Step.get(StepTag.STEP_7, delay = ForwardAntiBan.stepDelayMs())
             } else {
                 ("未找到多选按钮，重试").logAppend()
                 AssistsCore.back() //返回到聊天窗口
@@ -807,7 +804,7 @@ class Forward : StepImpl() {
             ("STEP_7: 开始执行 - 选择目标群组").logAppend()
             
             // 如果是 DEBUG 模式，只选择文件传输助手
-            if (DEBUG) {
+            if (ForwardAntiBan.isDebugEnabled()) {
                 ("DEBUG 模式，只选择文件传输助手").logAppend()
                 val fileTransferNode = AssistsCore.getAllNodes().find {
                     it.className == WechatResourceIds.NodeClasses.TEXT_VIEW
@@ -815,11 +812,11 @@ class Forward : StepImpl() {
                 }
                 
                 if (fileTransferNode != null) {
-                    ("已找到文件传输助手，1秒后点击").logAppend()
-                    delay(1000)
-                    fileTransferNode.findFirstParentClickable()?.click()
+                    ("已找到文件传输助手，准备点击").logAppend()
+                    ForwardAntiBan.maybeStepPause()
+                    ForwardAntiBan.humanClickParent(fileTransferNode)
                     ("已点击文件传输助手").logAppend()
-                    return@next Step.get(StepTag.STEP_9, delay = 1000)
+                    return@next Step.get(StepTag.STEP_9, delay = ForwardAntiBan.stepDelayMs())
                 } else {
                     ("未找到文件传输助手，尝试滚动列表").logAppend()
                     val listContainer = AssistsCore.getAllNodes().find {
@@ -854,12 +851,12 @@ class Forward : StepImpl() {
             }
 
             if (groupNode != null) {
-                ("已定位到群组 $currentGroup，1秒后点击。").logAppend()
-                delay(1000)
-                groupNode.findFirstParentClickable()?.click()
+                ("已定位到群组 $currentGroup，准备点击。").logAppend()
+                ForwardAntiBan.maybeStepPause()
+                ForwardAntiBan.humanClickParent(groupNode)
                 ("已点击群组 $currentGroup").logAppend()
-                currentGroupIndex++ // 移动到下一个群组
-                return@next Step.get(StepTag.STEP_7, delay = 1000)
+                currentGroupIndex++
+                return@next Step.get(StepTag.STEP_7, delay = ForwardAntiBan.stepDelayMs())
             } else {
                 ("未找到群组 $currentGroup，尝试滚动列表").logAppend()
                 val listContainer = AssistsCore.getAllNodes().find {
@@ -888,12 +885,12 @@ class Forward : StepImpl() {
                         && it.isClickable
             }
             if (finishBtn != null) {
-                ("已定位到完成按钮，1秒后点击。").logAppend()
+                ("已定位到完成按钮，准备点击。").logAppend()
                 resetRetryCount()
-                delay(1000)
-                finishBtn.click()
+                ForwardAntiBan.maybeStepPause()
+                ForwardAntiBan.humanClick(finishBtn)
                 ("已点击完成按钮").logAppend()
-                return@next Step.get(StepTag.STEP_10, delay = 1000)
+                return@next Step.get(StepTag.STEP_10, delay = ForwardAntiBan.stepDelayMs())
             } else {
                 val currentRetry = incrementRetryCount()
                 ("未找到完成按钮，第 $currentRetry 次重试").logAppend()
@@ -918,18 +915,18 @@ class Forward : StepImpl() {
                         && it.isClickable
             }
             if (sendBtn != null) {
-                ("已定位到发送按钮，1秒后点击。").logAppend()
-                delay(1000)
-                sendBtn.click()
+                ("已定位到发送按钮，准备点击。").logAppend()
+                ForwardAntiBan.maybeStepPause()
+                ForwardAntiBan.humanClick(sendBtn)
                 confirmMessageTime()
                 if (isLastMsgText == true) {
                     ("isLastMsgText 为 true。").logAppend()
                     ("已点击发送按钮，准备查找最新图片消息").logAppend()
                     if (checkBackToWechatMain()) {
-                        return@next Step.get(StepTag.STEP_2, delay = 3000)
+                        return@next ForwardAntiBan.afterForwardCycle()
                     }
                     ("没有到微信主页面。").logAppend()
-                    return@next Step.get(StepTag.STEP_100, delay = 3000)
+                    return@next Step.get(StepTag.STEP_100, delay = ForwardAntiBan.stepDelayMs())
                 } else {
                     ("已点击发送按钮，准备查找最新文字消息").logAppend()
                     delay(5000)
@@ -951,8 +948,7 @@ class Forward : StepImpl() {
                     it.className == WechatResourceIds.NodeClasses.RELATIVE_LAYOUT && it.viewIdResourceName == WechatResourceIds.BN1
                 }
             }
-            fun tryEnterSourceChatFromChatList(): Boolean {
-                // 会话列表每行 LinearLayout(cj0) 下通常有群名 TextView(kbq)
+            suspend fun tryEnterSourceChatFromChatList(): Boolean {
                 val rows = AssistsCore.getAllNodes().filter {
                     it.className == WechatResourceIds.NodeClasses.LINEAR_LAYOUT && it.viewIdResourceName == WechatResourceIds.CJ0
                 }
@@ -962,7 +958,7 @@ class Forward : StepImpl() {
                     val kbq = row.getNodes().find { it.viewIdResourceName == WechatResourceIds.KBQ }
                     if (kbq?.text?.toString()?.contains(targetName) == true) {
                         ("STEP_11: 在会话列表找到线报群「$targetName」，点击进入").logAppend()
-                        kbq.findFirstParentClickable()?.click()
+                        ForwardAntiBan.humanClickParent(kbq)
                         return true
                     }
                 }
@@ -1062,7 +1058,7 @@ class Forward : StepImpl() {
             }
 
             // debug
-            if (DEBUG) {
+            if (ForwardAntiBan.isDebugEnabled()) {
                 ("DEBUG模式，设置 lastTextMsg 为 null").logAppend()
                 lastTextMsg = null
             }
@@ -1122,11 +1118,11 @@ class Forward : StepImpl() {
                     it.viewIdResourceName == WechatResourceIds.KBQ && (it.text?.contains("京粉") == true)
                 }
                 if (kbqNode != null) {
-                    ("已找到并定位到京粉，1秒后点击。").logAppend()
-                    delay(1000)
-                    kbqNode.findFirstParentClickable()?.click()
+                    ("已找到并定位到京粉，准备点击。").logAppend()
+                    ForwardAntiBan.maybeStepPause()
+                    ForwardAntiBan.humanClickParent(kbqNode)
                     ("已找到并点击京粉").logAppend()
-                    return@next Step.get(StepTag.STEP_13)
+                    return@next Step.get(StepTag.STEP_13, delay = ForwardAntiBan.stepDelayMs())
                 }
             }
 
@@ -1155,11 +1151,11 @@ class Forward : StepImpl() {
                         && it.contentDescription?.contains(WechatResourceIds.ButtonTexts.SWITCH_TO_MESSAGE) == true
             }
             if (switchMsgNode != null) {
-                ("已定位到切换到发消息按钮，1秒后点击。").logAppend()
-                delay(1000)
-                switchMsgNode.click()
+                ("已定位到切换到发消息按钮，准备点击。").logAppend()
+                ForwardAntiBan.maybeStepPause()
+                ForwardAntiBan.humanClick(switchMsgNode)
                 ("已点击切换到发消息").logAppend()
-                return@next Step.get(StepTag.STEP_14, delay = 1000)
+                return@next Step.get(StepTag.STEP_14, delay = ForwardAntiBan.stepDelayMs())
             } else {
                 ("未找到切换到发消息按钮，重试").logAppend()
                 return@next Step.get(StepTag.STEP_13, delay = 1000)
@@ -1176,9 +1172,9 @@ class Forward : StepImpl() {
 
                 if (editTextNode != null) {
                     if (!ProcessedMsgText.isNullOrBlank()) {
-                        editTextNode.setNodeText(ProcessedMsgText)
+                        ForwardAntiBan.humanType(editTextNode, ProcessedMsgText)
                         ("已设置文本内容").logAppend()
-                        return@next Step.get(StepTag.STEP_15, delay = 1000)
+                        return@next Step.get(StepTag.STEP_15, delay = ForwardAntiBan.stepDelayMs())
                     }
                     ("文本内容为空，重试").logAppend()
                     incrementRetryCount()
@@ -1208,9 +1204,9 @@ class Forward : StepImpl() {
                 ("已定位到输入框。").logAppend()
 
                 if (!ProcessedMsgText.isNullOrBlank()) {
-                    editTextNode.setNodeText(ProcessedMsgText)
+                    ForwardAntiBan.humanType(editTextNode, ProcessedMsgText)
                     ("已设置文本内容").logAppend()
-                    return@next Step.get(StepTag.STEP_15, delay = 1000)
+                    return@next Step.get(StepTag.STEP_15, delay = ForwardAntiBan.stepDelayMs())
                 }
                 ("文本内容为空，重试").logAppend()
                 incrementRetryCount()
@@ -1245,11 +1241,11 @@ class Forward : StepImpl() {
                         && it.text?.contains(WechatResourceIds.ButtonTexts.SEND) == true && it.isClickable
             }
             if (sendBtn != null) {
-                ("已定位到发送按钮，1秒后点击。").logAppend()
-                delay(1000)
-                sendBtn.click()
+                ("已定位到发送按钮，准备点击。").logAppend()
+                ForwardAntiBan.maybeStepPause()
+                ForwardAntiBan.humanClick(sendBtn)
                 ("已点击发送按钮，进入下一步").logAppend()
-                return@next Step.get(StepTag.STEP_16, delay = 5000)
+                return@next Step.get(StepTag.STEP_16, delay = ForwardAntiBan.stepDelayMs())
             } else {
                 ("未找到发送按钮，重试").logAppend()
                 return@next Step.get(StepTag.STEP_14, delay = 1000)
@@ -1317,13 +1313,8 @@ class Forward : StepImpl() {
             }
 
             if (wechatNode != null) {
-                // 双击"微信"
-                wechatNode.findFirstParentClickable()?.let { parent ->
-                    parent.click()
-                    delay(100)
-                    parent.click()
-                    ("已双击顶部微信").logAppend()
-                }
+                ForwardAntiBan.humanDoubleClickParent(wechatNode)
+                ("已双击顶部微信").logAppend()
             } else {
                 ("未找到顶部微信，重试").logAppend()
                 return@next Step.get(StepTag.STEP_17, delay = 1000)
@@ -1337,11 +1328,11 @@ class Forward : StepImpl() {
             }
 
             if (fileTransferNode != null) {
-                ("已定位到文件传输助手，1秒后点击。").logAppend()
-                delay(1000)
-                fileTransferNode.findFirstParentClickable()?.click()
+                ("已定位到文件传输助手，准备点击。").logAppend()
+                ForwardAntiBan.maybeStepPause()
+                ForwardAntiBan.humanClickParent(fileTransferNode)
                 ("已点击文件传输助手").logAppend()
-                return@next Step.get(StepTag.STEP_18, delay = 1000)
+                return@next Step.get(StepTag.STEP_18, delay = ForwardAntiBan.stepDelayMs())
             } else {
                 ("未找到文件传输助手，重试").logAppend()
                 return@next Step.get(StepTag.STEP_17, delay = 1000)
@@ -1358,21 +1349,20 @@ class Forward : StepImpl() {
 
             if (editTextNode != null) {
                 if (!ProcessedMsgText.isNullOrBlank()) {
-                    editTextNode.setNodeText(ProcessedMsgText)
+                    ForwardAntiBan.humanType(editTextNode, ProcessedMsgText)
                     ("已设置文本内容。").logAppend()
-                    delay(1000)
+                    ForwardAntiBan.maybeStepPause()
                 }
-                    // 4. 查找并点击发送按钮
                     val sendBtn = AssistsCore.getAllNodes().find {
                         (it.className == WechatResourceIds.NodeClasses.BUTTON || it.className == WechatResourceIds.NodeClasses.TEXT_VIEW)
                                 && it.text?.contains(WechatResourceIds.ButtonTexts.SEND) == true && it.isClickable
                     }
                     if (sendBtn != null) {
-                        ("已定位到发送按钮，1秒后点击。").logAppend()
-                        delay(1000)
-                        sendBtn.click()
-                        ("已点击发送按钮，完成所有步骤").logAppend()
-                        return@next Step.get(StepTag.STEP_19, delay = 1000)
+                        ("已定位到发送按钮，准备点击。").logAppend()
+                        ForwardAntiBan.maybeStepPause()
+                        ForwardAntiBan.humanClick(sendBtn)
+                        ("已点击发送按钮，完成文本输入步骤").logAppend()
+                        return@next Step.get(StepTag.STEP_19, delay = ForwardAntiBan.stepDelayMs())
                     } else {
                         ("未找到发送按钮，重试").logAppend()
                         return@next Step.get(StepTag.STEP_18, delay = 1000)
@@ -1455,7 +1445,7 @@ class Forward : StepImpl() {
                         // 3. 点击该按钮，然后就设置isLastMsgText = true，ProcessedMsgText = null，resetRetryCount()，跳转到STEP6
                         if (shareButton != null) {
                             Log.d("Forward", "STEP_19: 分享按钮bounds: ${shareButton.getBoundsInScreen()}")
-                            if (shareButton.click()) {
+                            if (ForwardAntiBan.humanClick(shareButton)) {
                                 ("成功点击分享按钮").logAppend()
                                 isLastMsgText = true
                                 ("设置 isLastMsgText 为 true").logAppend()
@@ -1489,6 +1479,60 @@ class Forward : StepImpl() {
             }
         }
 
+        //200. Deep Sleep：等待通知或慢轮询兜底
+        collector.next(StepTag.STEP_200) { step ->
+            setLastStep(StepTag.STEP_200)
+            AssistsService.releaseScreenWakeLock()
+            ForwardNotificationListener.setWaitingForWake(true)
+
+            if (!ForwardAntiBan.ensureGuardAllowed()) {
+                val waitSec = AntiBanGuard.randomPollIntervalSec().coerceAtLeast(60)
+                ("防封守卫拒绝，${waitSec}s 后再检查").logAppend()
+                for (left in waitSec downTo 1) {
+                    if (ForwardNotificationListener.consumeWakeRequest()) {
+                        return@next Step.get(StepTag.STEP_2, delay = ForwardAntiBan.stepDelayMs())
+                    }
+                    delay(1000)
+                }
+                return@next Step.get(StepTag.STEP_200, delay = 500)
+            }
+
+            val waitSec = AntiBanGuard.randomPollIntervalSec()
+            ("Deep Sleep: 等待通知或 ${waitSec}s 兜底检查").logAppend()
+            for (left in waitSec downTo 1) {
+                if (ForwardNotificationListener.consumeWakeRequest()) {
+                    AssistsService.acquireScreenWakeLock()
+                    return@next Step.get(StepTag.STEP_2, delay = ForwardAntiBan.stepDelayMs())
+                }
+                delay(1000)
+            }
+            AssistsService.acquireScreenWakeLock()
+            return@next Step.get(StepTag.STEP_2, delay = ForwardAntiBan.stepDelayMs())
+        }
+
+        //201. 养号噪声：随机浏览微信 Tab
+        collector.next(StepTag.STEP_201) { step ->
+            setLastStep(StepTag.STEP_201)
+            ("STEP_201: 养号浏览").logAppend()
+            if (!isWechatMainPage()) {
+                checkBackToWechatMain()
+            }
+            val tabs = listOf(
+                WechatResourceIds.ButtonTexts.CONTACTS,
+                "发现",
+                WechatResourceIds.ButtonTexts.WECHAT,
+            )
+            val pick = tabs.random()
+            findTextViewByIdAndText(WechatResourceIds.ICON_TV, pick)?.let {
+                ForwardAntiBan.humanClickParent(it)
+            }
+            delay(kotlin.random.Random.nextLong(3000, 8001))
+            findListViewById(WechatResourceIds.I3Y)?.scrollForward()
+            delay(kotlin.random.Random.nextLong(2000, 5001))
+            AssistsCore.launchApp("com.tencent.mm")
+            return@next ForwardAntiBan.enterDeepSleep()
+        }
+
         //100. 恢复到微信主页面
         collector.next(StepTag.STEP_100) { step ->
             setLastStep(StepTag.STEP_100)
@@ -1501,21 +1545,19 @@ class Forward : StepImpl() {
                         && it.text?.toString() == WechatResourceIds.ButtonTexts.WECHAT
             }
 
-            wechatNode?.findFirstParentClickable()?.let { parent ->
-                parent.click()
-                delay(100)
-                parent.click()
+            wechatNode?.let {
+                ForwardAntiBan.humanDoubleClickParent(it)
                 ("已双击顶部微信，成功返回主页面").logAppend()
-                return@next Step.get(StepTag.STEP_2, delay = 1000)
+                return@next ForwardAntiBan.enterDeepSleep()
             }
 
             // 2. 如果没找到顶部微信，尝试多次返回
             if (checkBackToWechatMain(10)) {
-                return@next Step.get(StepTag.STEP_2, delay = 1000)
+                return@next ForwardAntiBan.enterDeepSleep()
             }
 
             ("未能返回微信主页面，重新启动微信").logAppend()
-            return@next Step.get(StepTag.STEP_1, delay = 1000)
+            return@next Step.get(StepTag.STEP_1, delay = ForwardAntiBan.stepDelayMs())
         }
     }
 }
