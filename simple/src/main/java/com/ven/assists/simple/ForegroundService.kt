@@ -15,15 +15,14 @@ class ForegroundService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        // API 34+ 必须在 manifest 与 startForeground 中声明类型，否则 MissingForegroundServiceTypeException
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            ServiceCompat.startForeground(
-                this,
-                1,
-                createNotification(),
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
-            )
+        // 必须在 startForegroundService 后 5 秒内调用，否则系统抛 ForegroundServiceDidNotStartInTimeException
+        // API 34+ 还要求在 manifest 与 startForeground 中声明类型，否则 MissingForegroundServiceTypeException
+        val serviceType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+        } else {
+            0
         }
+        ServiceCompat.startForeground(this, 1, createNotification(), serviceType)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
